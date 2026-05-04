@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useNotificationResponseNavigation } from '@/hooks/use-notification-response-navigation';
 import { AuthProvider, useAuth } from '@/lib/auth/useAuth';
 
 const queryClient = new QueryClient();
@@ -46,6 +47,8 @@ function AuthNavigationSync() {
 }
 
 function RootStack() {
+  useNotificationResponseNavigation();
+
   return (
     <>
       <AuthNavigationSync />
