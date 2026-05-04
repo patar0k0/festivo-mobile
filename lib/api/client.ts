@@ -4,12 +4,15 @@ function joinBaseAndPath(base: string, path: string): string {
   return `${trimmedBase}${normalizedPath}`;
 }
 
-export function apiFetch(path: string, token?: string): Promise<Response> {
+export function apiFetch(path: string, token?: string, init?: RequestInit): Promise<Response> {
   const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? '';
   const url = joinBaseAndPath(baseUrl, path);
-  const headers: Record<string, string> = {};
+  const headers = new Headers(init?.headers ?? undefined);
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    headers.set('Authorization', `Bearer ${token}`);
   }
-  return fetch(url, { headers: Object.keys(headers).length ? headers : undefined });
+  return fetch(url, {
+    ...init,
+    headers,
+  });
 }
