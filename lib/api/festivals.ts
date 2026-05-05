@@ -1,5 +1,3 @@
-import { getAccessToken } from '@/lib/auth/useAuth';
-
 import { apiFetch } from './client';
 
 export type GetFestivalsParams = {
@@ -94,9 +92,8 @@ async function readJson(res: Response): Promise<unknown> {
 
 export async function getFestivals(params?: GetFestivalsParams): Promise<FestivalListItem[]> {
   void params;
-  const token = await getAccessToken();
   const path = '/api/mobile/festivals?limit=10';
-  const res = await apiFetch(path, token ?? undefined);
+  const res = await apiFetch(path);
   if (!res.ok) {
     const body = await readJson(res);
     const message =
@@ -121,9 +118,8 @@ export async function getFestivals(params?: GetFestivalsParams): Promise<Festiva
 }
 
 export async function getFestival(slug: string): Promise<FestivalDetail> {
-  const token = await getAccessToken();
   const path = `/api/mobile/festivals/${encodeURIComponent(slug)}`;
-  const res = await apiFetch(path, token ?? undefined);
+  const res = await apiFetch(path);
   if (!res.ok) {
     const body = await readJson(res);
     const message =
