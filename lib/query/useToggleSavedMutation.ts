@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { type QueryKey, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import type { FestivalDetail, FestivalListItem } from '@/lib/api/festivals';
 import { toggleSaved } from '@/lib/api/saved';
@@ -10,7 +10,7 @@ type ToggleSavedInput = {
 };
 
 type ToggleSavedContext = {
-  festivals?: FestivalListItem[];
+  festivalQuerySnapshots?: Array<{ queryKey: QueryKey; data: FestivalListItem[] }>;
   savedFestivals?: FestivalListItem[];
   festivalDetail?: FestivalDetail;
   slug?: string;
@@ -58,14 +58,19 @@ export function useToggleSavedMutation() {
         queryClient.cancelQueries({ queryKey: ['festival'] }),
       ]);
 
-      const festivals = queryClient.getQueryData<FestivalListItem[]>(['festivals']);
+      const festivalQuerySnapshots = queryClient
+        .getQueriesData<FestivalListItem[]>({ queryKey: ['festivals'] })
+        .filter((entry): entry is [QueryKey, FestivalListItem[]] => Array.isArray(entry[1]))
+        .map(([queryKey, data]) => ({ queryKey, data }));
+
       const savedFestivals = queryClient.getQueryData<FestivalListItem[]>(['savedFestivals']);
       const slug = input.slug ?? input.festival?.slug;
       const festivalDetail = slug
         ? queryClient.getQueryData<FestivalDetail>(['festival', slug])
         : undefined;
 
-      const inFestivalList = festivals?.find((item) => matchesFestival(item, input));
+      const flatFestivalLists = festivalQuerySnapshots.flatMap((s) => s.data);
+      const inFestivalList = flatFestivalLists.find((item) => matchesFestival(item, input));
       const inDetail =
         festivalDetail && (matchesFestival(festivalDetail, input) || festivalDetail.slug === slug)
           ? festivalDetail
@@ -75,8 +80,8 @@ export function useToggleSavedMutation() {
       const currentSavedState = inFestivalList?.saved ?? inDetail?.saved ?? Boolean(inSavedList);
       const nextSavedState = !currentSavedState;
 
-      if (festivals) {
-        queryClient.setQueryData<FestivalListItem[]>(['festivals'], toggleSavedInList(festivals, input));
+      for (const { queryKey, data } of festivalQuerySnapshots) {
+        queryClient.setQueryData<FestivalListItem[]>(queryKey, toggleSavedInList(data, input));
       }
 
       if (slug && festivalDetail && (matchesFestival(festivalDetail, input) || festivalDetail.slug === slug)) {
@@ -98,12 +103,14 @@ export function useToggleSavedMutation() {
         queryClient.setQueryData<FestivalListItem[]>(['savedFestivals'], nextSaved);
       }
 
-      return { festivals, savedFestivals, festivalDetail, slug };
+      return { festivalQuerySnapshots, savedFestivals, festivalDetail, slug };
     },
     onError: (_error, _input, context) => {
       if (!context) return;
-      if (context.festivals) {
-        queryClient.setQueryData(['festivals'], context.festivals);
+      if (context.festivalQuerySnapshots) {
+        for (const { queryKey, data } of context.festivalQuerySnapshots) {
+          queryClient.setQueryData(queryKey, data);
+        }
       }
       if (context.savedFestivals) {
         queryClient.setQueryData(['savedFestivals'], context.savedFestivals);

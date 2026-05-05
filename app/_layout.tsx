@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -10,8 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotificationResponseNavigation } from '@/hooks/use-notification-response-navigation';
 import { AuthProvider, useAuth } from '@/lib/auth/useAuth';
-
-const queryClient = new QueryClient();
+import { queryClient } from '@/lib/queryClient';
 
 SplashScreen.preventAutoHideAsync();
 

@@ -8,6 +8,8 @@ export type GetFestivalsParams = {
   limit?: number;
   startDate?: string;
   endDate?: string;
+  sort?: 'trending' | 'popular';
+  when?: 'this_week';
 };
 
 export type FestivalListItem = {
@@ -16,6 +18,8 @@ export type FestivalListItem = {
   title: string;
   city: string;
   start_date: string;
+  end_date?: string;
+  image_url?: string | null;
   saved: boolean;
 };
 
@@ -44,12 +48,21 @@ function parseListItem(raw: unknown): FestivalListItem | null {
   const slug = String(o.slug ?? '');
   const title = String(o.title ?? '');
   if (!festivalId || !slug || !title) return null;
+  const endRaw = o.end_date ?? o.endDate;
+  const imageRaw = o.image_url ?? o.imageUrl;
   return {
     festivalId,
     slug,
     title,
     city: String(o.city ?? ''),
     start_date: String(o.start_date ?? o.startDate ?? ''),
+    end_date: endRaw != null && String(endRaw).trim() ? String(endRaw) : undefined,
+    image_url:
+      typeof imageRaw === 'string' && imageRaw.trim()
+        ? imageRaw.trim()
+        : imageRaw != null
+          ? String(imageRaw)
+          : null,
     saved: Boolean(o.saved ?? o.is_saved ?? o.isSaved),
   };
 }
@@ -91,8 +104,19 @@ async function readJson(res: Response): Promise<unknown> {
 }
 
 export async function getFestivals(params?: GetFestivalsParams): Promise<FestivalListItem[]> {
-  void params;
-  const path = '/api/mobile/festivals?limit=10';
+  const search = new URLSearchParams();
+  const limit = params?.limit ?? 10;
+  search.set('limit', String(limit));
+  if (params?.page != null) search.set('page', String(params.page));
+  if (params?.city?.trim()) search.set('city', params.city.trim());
+  if (params?.category?.trim()) search.set('category', params.category.trim());
+  if (params?.sort) search.set('sort', params.sort);
+  if (params?.when) search.set('when', params.when);
+  if (params?.startDate?.trim()) search.set('from', params.startDate.trim());
+  if (params?.endDate?.trim()) search.set('to', params.endDate.trim());
+
+  const qs = search.toString();
+  const path = `/api/mobile/festivals?${qs}`;
   const res = await apiFetch(path);
   if (!res.ok) {
     const body = await readJson(res);
@@ -112,9 +136,7 @@ export async function getFestivals(params?: GetFestivalsParams): Promise<Festiva
         ? record.data
         : [];
   if (!Array.isArray(rawList)) return [];
-  const data = rawList.map(parseListItem).filter((x): x is FestivalListItem => x != null);
-  console.log('festivals:', data);
-  return data;
+  return rawList.map(parseListItem).filter((x): x is FestivalListItem => x != null);
 }
 
 export async function getFestival(slug: string): Promise<FestivalDetail> {
@@ -131,4 +153,9 @@ export async function getFestival(slug: string): Promise<FestivalDetail> {
   const body = await readJson(res);
   const payload = asRecord(body)?.data ?? body;
   return parseDetail(payload, slug);
+}
+
+/** Alias for detail prefetch / readability; same contract as {@link getFestival}. */
+export async function getFestivalBySlug(slug: string): Promise<FestivalDetail> {
+  return getFestival(slug);
 }
