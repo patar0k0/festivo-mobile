@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -81,9 +82,16 @@ export function FestivalSaveButton({
 export function FestivalCard({ item, onPressCard, onPressSave, variant = 'default' }: FestivalCardProps) {
   const saveLabel = item.saved ? 'Reminder set' : 'Remind me';
   const startsInText = getStartsInText(item.start_date);
+  const lastSaveTapRef = useRef(0);
   const imageUrl =
     (item as FestivalListItem & { image_url?: string; imageUrl?: string }).image_url ??
     (item as FestivalListItem & { image_url?: string; imageUrl?: string }).imageUrl;
+  const handleSavePress = () => {
+    const now = Date.now();
+    if (now - lastSaveTapRef.current < 500) return;
+    lastSaveTapRef.current = now;
+    onPressSave();
+  };
 
   if (imageUrl) {
     return (
@@ -116,7 +124,7 @@ export function FestivalCard({ item, onPressCard, onPressSave, variant = 'defaul
           </Text>
         </View>
         <View style={styles.heroCtaWrap}>
-          <FestivalSaveButton label={saveLabel} onPress={onPressSave} floating />
+          <FestivalSaveButton label={saveLabel} onPress={handleSavePress} floating />
         </View>
         {item.saved ? <Text style={styles.heroReminderHint}>You'll get notified before it starts</Text> : null}
       </Pressable>
@@ -139,7 +147,7 @@ export function FestivalCard({ item, onPressCard, onPressSave, variant = 'defaul
           {startsInText}
         </Text>
       </Pressable>
-      <FestivalSaveButton label={saveLabel} onPress={onPressSave} />
+      <FestivalSaveButton label={saveLabel} onPress={handleSavePress} />
       {item.saved ? <Text style={styles.reminderHint}>You'll get notified before it starts</Text> : null}
     </View>
   );
@@ -148,9 +156,16 @@ export function FestivalCard({ item, onPressCard, onPressSave, variant = 'defaul
 export function FeaturedFestivalCard({ item, onPressCard, onPressSave }: Omit<FestivalCardProps, 'variant'>) {
   const saveLabel = item.saved ? 'Reminder set' : 'Remind me';
   const startsInText = getStartsInText(item.start_date);
+  const lastSaveTapRef = useRef(0);
   const imageUrl =
     (item as FestivalListItem & { image_url?: string; imageUrl?: string }).image_url ??
     (item as FestivalListItem & { image_url?: string; imageUrl?: string }).imageUrl;
+  const handleSavePress = () => {
+    const now = Date.now();
+    if (now - lastSaveTapRef.current < 500) return;
+    lastSaveTapRef.current = now;
+    onPressSave();
+  };
 
   if (!imageUrl) {
     return <FestivalCard item={item} onPressCard={onPressCard} onPressSave={onPressSave} />;
@@ -179,7 +194,7 @@ export function FeaturedFestivalCard({ item, onPressCard, onPressSave }: Omit<Fe
         </Text>
       </View>
       <View style={styles.featuredCtaWrap}>
-        <FestivalSaveButton label={saveLabel} onPress={onPressSave} floating floatingLarge />
+        <FestivalSaveButton label={saveLabel} onPress={handleSavePress} floating floatingLarge />
       </View>
       {item.saved ? <Text style={styles.featuredReminderHint}>You'll get notified before it starts</Text> : null}
     </Pressable>
