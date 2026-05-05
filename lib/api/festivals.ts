@@ -106,7 +106,14 @@ export async function getFestivals(params?: GetFestivalsParams): Promise<Festiva
     throw new Error(message);
   }
   const body = await readJson(res);
-  const rawList = Array.isArray(body) ? body : asRecord(body)?.data;
+  const record = asRecord(body);
+  const rawList = Array.isArray(body)
+    ? body
+    : Array.isArray(record?.festivals)
+      ? record.festivals
+      : Array.isArray(record?.data)
+        ? record.data
+        : [];
   if (!Array.isArray(rawList)) return [];
   const data = rawList.map(parseListItem).filter((x): x is FestivalListItem => x != null);
   console.log('festivals:', data);
