@@ -40,6 +40,18 @@ function InfoRow({ label, value, isLast }: { label: string; value: string; isLas
   );
 }
 
+function getStartsInText(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfTarget = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.ceil((startOfTarget.getTime() - startOfToday.getTime()) / 86400000);
+  if (diffDays <= 0) return 'Started';
+  if (diffDays === 1) return 'Starts in 1 day';
+  return `Starts in ${diffDays} days`;
+}
+
 export default function FestivalDetailScreen() {
   const { slug: slugParam } = useLocalSearchParams<{ slug: string }>();
   const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam;
@@ -79,7 +91,7 @@ export default function FestivalDetailScreen() {
       <View style={styles.root}>
         <View style={[styles.hero, styles.heroSkeleton]} />
         <View style={styles.ctaBar}>
-          <FestivalSaveButton label="Save festival" onPress={() => {}} disabled />
+          <FestivalSaveButton label="Remind me" onPress={() => {}} disabled />
         </View>
         <View style={styles.screenContent}>
           <Text style={[festivalUi.typography.secondary, styles.loadingText]}>Loading festival details...</Text>
@@ -94,7 +106,7 @@ export default function FestivalDetailScreen() {
   if (isError) {
     return (
       <View style={styles.screenContent}>
-        <FestivalSaveButton label="Save festival" onPress={() => {}} disabled />
+        <FestivalSaveButton label="Remind me" onPress={() => {}} disabled />
         <Text style={styles.bodyText}>We could not load this festival right now.</Text>
         <Text style={[festivalUi.typography.secondary, styles.subText]}>Please try again.</Text>
         <OutlinedActionButton label="Try again" onPress={() => refetch()} />
@@ -111,7 +123,8 @@ export default function FestivalDetailScreen() {
   }
 
   const datesText = [data.start_date, data.end_date].filter(Boolean).join(' — ');
-  const saveLabel = data.saved ? 'Remove from saved' : 'Save festival';
+  const saveLabel = data.saved ? 'Reminder set' : 'Remind me';
+  const startsInText = getStartsInText(data.start_date);
   const description = data.description ?? '';
   const needsDescriptionToggle = description.length > DESCRIPTION_PREVIEW_CHARS;
   const descriptionShown =
@@ -151,6 +164,7 @@ export default function FestivalDetailScreen() {
               })
             }
           />
+          {data.saved ? <Text style={styles.reminderHint}>You'll get notified before it starts</Text> : null}
         </View>
 
         {/* Title block */}
@@ -158,6 +172,7 @@ export default function FestivalDetailScreen() {
           <Text style={styles.detailTitle}>{data.title}</Text>
           <Text style={[festivalUi.typography.secondary, styles.city]}>{data.city}</Text>
           <Text style={[festivalUi.typography.muted, styles.dates]}>{datesText || data.start_date}</Text>
+          <Text style={[festivalUi.typography.muted, styles.startsIn]}>{startsInText}</Text>
         </View>
 
         {/* Info */}
@@ -266,6 +281,15 @@ const styles = StyleSheet.create({
   dates: {
     marginTop: 6,
     fontSize: 15,
+  },
+  startsIn: {
+    marginTop: 6,
+    fontSize: 14,
+  },
+  reminderHint: {
+    marginTop: 8,
+    fontSize: 12,
+    color: festivalUi.colors.secondary,
   },
   sectionHeading: {
     fontSize: 17,

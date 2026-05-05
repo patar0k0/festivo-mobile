@@ -6,6 +6,7 @@ import type { FestivalListItem } from '@/lib/api/festivals';
 import { getFestivals } from '@/lib/api/festivals';
 import {
   FestivalCard,
+  FeaturedFestivalCard,
   FestivalSectionTitle,
   festivalUi,
   OutlinedActionButton,
@@ -123,18 +124,42 @@ export default function Index() {
     />
   );
 
-  const renderSection = (title: string, data: FestivalListItem[], emptyText: string) => (
+  const renderSection = (
+    title: string,
+    data: FestivalListItem[],
+    emptyText: string,
+    withFeaturedFirst = false
+  ) => (
     <View style={styles.section}>
       <FestivalSectionTitle>{title}</FestivalSectionTitle>
       {data.length ? (
-        <FlatList
-          data={data}
-          horizontal
-          keyExtractor={(item) => item.slug}
-          renderItem={renderFestivalItem}
-          showsHorizontalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={{ width: festivalUi.cardGap }} />}
-        />
+        <>
+          {withFeaturedFirst ? (
+            <View style={styles.featuredWrap}>
+              <FeaturedFestivalCard
+                item={data[0]}
+                onPressCard={() => router.push(`/festival/${data[0].slug}`)}
+                onPressSave={() =>
+                  toggleSavedMutation.mutate({
+                    festivalId: data[0].festivalId,
+                    slug: data[0].slug,
+                    festival: data[0],
+                  })
+                }
+              />
+            </View>
+          ) : null}
+          {withFeaturedFirst && data.length === 1 ? null : (
+            <FlatList
+              data={withFeaturedFirst ? data.slice(1) : data}
+              horizontal
+              keyExtractor={(item) => item.slug}
+              renderItem={renderFestivalItem}
+              showsHorizontalScrollIndicator={false}
+              ItemSeparatorComponent={() => <View style={{ width: festivalUi.cardGap }} />}
+            />
+          )}
+        </>
       ) : (
         <Text style={festivalUi.typography.secondary}>{emptyText}</Text>
       )}
@@ -143,8 +168,8 @@ export default function Index() {
 
   return (
     <ScrollView contentContainerStyle={styles.screenContent}>
-      {renderSection('Popular', popular, 'No popular festivals right now')}
-      {renderSection('This week', thisWeek, 'No events this week')}
+      {renderSection('Popular', popular, 'No popular festivals right now', true)}
+      {renderSection('This week', thisWeek, 'No events this week', true)}
       {renderSection('Nearby', nearby, 'Nearby festivals are not available yet')}
     </ScrollView>
   );
@@ -157,6 +182,9 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: festivalUi.sectionGap,
+  },
+  featuredWrap: {
+    marginBottom: 18,
   },
   loadingLabel: {
     marginBottom: 10,

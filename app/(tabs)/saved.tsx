@@ -40,7 +40,7 @@ export default function SavedScreen() {
         <Text style={festivalUi.typography.sectionTitle}>Saved</Text>
         <Text style={[styles.bodyText, styles.emptyTitle]}>No saved festivals yet</Text>
         <Text style={[festivalUi.typography.secondary, styles.subText]}>
-          Tap Save festival on any event to keep it here.
+          Tap Remind me on any event to keep it here.
         </Text>
       </View>
     );
