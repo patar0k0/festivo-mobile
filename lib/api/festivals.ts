@@ -6,22 +6,30 @@ export type GetFestivalsParams = {
   page?: number | string;
   city?: string;
   category?: string;
+  saved?: boolean;
+  limit?: number;
+  startDate?: string;
+  endDate?: string;
 };
 
 export type FestivalListItem = {
+  festivalId: string;
   slug: string;
   title: string;
   city: string;
   start_date: string;
+  saved: boolean;
 };
 
 export type FestivalDetail = {
+  festivalId: string;
   slug: string;
   title: string;
   description: string;
   city: string;
   start_date: string;
   end_date?: string;
+  saved: boolean;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -34,19 +42,23 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function parseListItem(raw: unknown): FestivalListItem | null {
   const o = asRecord(raw);
   if (!o) return null;
+  const festivalId = String(o.festivalId ?? o.festival_id ?? o.id ?? '');
   const slug = String(o.slug ?? '');
   const title = String(o.title ?? '');
-  if (!slug || !title) return null;
+  if (!festivalId || !slug || !title) return null;
   return {
+    festivalId,
     slug,
     title,
     city: String(o.city ?? ''),
     start_date: String(o.start_date ?? o.startDate ?? ''),
+    saved: Boolean(o.saved ?? o.is_saved ?? o.isSaved),
   };
 }
 
 function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
   const o = asRecord(raw) ?? {};
+  const festivalId = String(o.festivalId ?? o.festival_id ?? o.id ?? '');
   const slug = String(o.slug ?? fallbackSlug);
   const title = String(o.title ?? '');
   const description = String(o.description ?? '');
@@ -58,7 +70,16 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
       : o.endDate != null
         ? String(o.endDate)
         : undefined;
-  return { slug, title, description, city, start_date, end_date };
+  return {
+    festivalId,
+    slug,
+    title,
+    description,
+    city,
+    start_date,
+    end_date,
+    saved: Boolean(o.saved ?? o.is_saved ?? o.isSaved),
+  };
 }
 
 async function readJson(res: Response): Promise<unknown> {
@@ -77,6 +98,10 @@ export async function getFestivals(params?: GetFestivalsParams): Promise<Festiva
   if (params?.page != null) search.set('page', String(params.page));
   if (params?.city) search.set('city', params.city);
   if (params?.category) search.set('category', params.category);
+  if (params?.saved != null) search.set('saved', String(params.saved));
+  if (params?.limit != null) search.set('limit', String(params.limit));
+  if (params?.startDate) search.set('start_date', params.startDate);
+  if (params?.endDate) search.set('end_date', params.endDate);
   const qs = search.toString();
   const path = `/api/mobile/festivals${qs ? `?${qs}` : ''}`;
   const res = await apiFetch(path, token ?? undefined);
