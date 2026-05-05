@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import type { ListRenderItemInfo, SectionListRenderItemInfo } from 'react-native';
 import {
   FlatList,
@@ -27,6 +27,9 @@ import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 const COLORS = festivalUi.colors;
 
 const FESTIVAL_PLACEHOLDER = require('@/assets/images/festival-placeholder.png');
+
+/** Horizontal gap between trending cards; must match `trendingItemSep` for accurate `getItemLayout`. */
+const TRENDING_CARD_SEPARATOR_WIDTH = 14;
 
 type SectionKey = 'week' | 'popular';
 
@@ -125,13 +128,20 @@ function TrendingCard({
   const dateLabel = formatShortDate(item.start_date);
 
   return (
-    <Pressable onPress={onPressCard} style={[styles.trendingCard, { width }]}>
+    <Pressable
+      onPress={onPressCard}
+      style={({ pressed }) => [
+        styles.trendingCard,
+        { width },
+        { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+      ]}>
       <Image
         source={uri ? { uri } : FESTIVAL_PLACEHOLDER}
         style={StyleSheet.absoluteFill}
         contentFit="cover"
         transition={180}
         cachePolicy="memory-disk"
+        priority="high"
       />
       <LinearGradient
         colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.78)']}
@@ -179,13 +189,19 @@ function CompactWeekCard({
   const range = formatDateRange(item.start_date, item.end_date);
 
   return (
-    <Pressable onPress={onPressCard} style={({ pressed }) => [styles.compactCard, pressed && styles.cardPressed]}>
+    <Pressable
+      onPress={onPressCard}
+      style={({ pressed }) => [
+        styles.compactCard,
+        { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+      ]}>
       <Image
         source={uri ? { uri } : FESTIVAL_PLACEHOLDER}
         style={styles.compactThumb}
         contentFit="cover"
         transition={120}
         cachePolicy="memory-disk"
+        priority="high"
       />
       <View style={styles.compactBody}>
         <Text style={styles.compactTitle} numberOfLines={2}>
@@ -232,7 +248,12 @@ function PopularCard({
   const range = formatDateRange(item.start_date, item.end_date);
 
   return (
-    <Pressable onPress={onPressCard} style={({ pressed }) => [styles.popularCard, pressed && styles.cardPressed]}>
+    <Pressable
+      onPress={onPressCard}
+      style={({ pressed }) => [
+        styles.popularCard,
+        { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+      ]}>
       <View style={styles.popularAccentBar} />
       <View style={styles.popularInner}>
         <Image
@@ -241,6 +262,7 @@ function PopularCard({
           contentFit="cover"
           transition={120}
           cachePolicy="memory-disk"
+          priority="high"
         />
         <View style={styles.popularTextCol}>
           <View style={styles.popularTitleRow}>
@@ -292,6 +314,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const toggleSavedMutation = useToggleSavedMutation();
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
   const trendingCardWidth = Math.min(360, Math.round(windowWidth * 0.88));
 
@@ -335,13 +358,12 @@ export default function HomeScreen() {
     popularQuery.refetch();
   };
 
-  const savePending = toggleSavedMutation.isPending;
-
   const openFestival = useCallback(
     (item: FestivalListItem) => {
       void queryClient.prefetchQuery({
         queryKey: ['festival', item.slug],
         queryFn: () => getFestivalBySlug(item.slug),
+        staleTime: 1000 * 60 * 5,
       });
       router.push(`/festival/${item.slug}`);
     },
@@ -350,13 +372,25 @@ export default function HomeScreen() {
 
   const onSave = useCallback(
     (item: FestivalListItem) => {
-      if (toggleSavedMutation.isPending) return;
+      const id = item.festivalId;
+      setPendingIds((prev) => new Set(prev).add(id));
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      toggleSavedMutation.mutate({
-        festivalId: item.festivalId,
-        slug: item.slug,
-        festival: item,
-      });
+      toggleSavedMutation.mutate(
+        {
+          festivalId: item.festivalId,
+          slug: item.slug,
+          festival: item,
+        },
+        {
+          onSettled: () => {
+            setPendingIds((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+          },
+        },
+      );
     },
     [toggleSavedMutation],
   );
@@ -368,10 +402,10 @@ export default function HomeScreen() {
         width={trendingCardWidth}
         onPressCard={() => openFestival(item)}
         onPressSave={() => onSave(item)}
-        saveDisabled={savePending}
+        saveDisabled={pendingIds.has(item.festivalId)}
       />
     ),
-    [trendingCardWidth, onSave, openFestival, savePending],
+    [trendingCardWidth, onSave, openFestival, pendingIds],
   );
 
   const renderSectionItem = useCallback(
@@ -381,17 +415,17 @@ export default function HomeScreen() {
           item={item}
           onPressCard={() => openFestival(item)}
           onPressSave={() => onSave(item)}
-          saveDisabled={savePending}
+          saveDisabled={pendingIds.has(item.festivalId)}
         />
       ) : (
         <PopularCard
           item={item}
           onPressCard={() => openFestival(item)}
           onPressSave={() => onSave(item)}
-          saveDisabled={savePending}
+          saveDisabled={pendingIds.has(item.festivalId)}
         />
       ),
-    [onSave, openFestival, savePending],
+    [onSave, openFestival, pendingIds],
   );
 
   const refreshing =
@@ -403,7 +437,7 @@ export default function HomeScreen() {
       keyExtractor={(item) => item.slug}
       stickySectionHeadersEnabled={false}
       nestedScrollEnabled
-      extraData={savePending}
+      extraData={pendingIds}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       contentContainerStyle={[styles.listContent, { paddingTop: insets.top + 8, paddingBottom: 32 }]}
       renderSectionHeader={({ section }) => (
@@ -435,7 +469,12 @@ export default function HomeScreen() {
                     maxToRenderPerBatch={5}
                     contentContainerStyle={styles.trendingFlatListContent}
                     ItemSeparatorComponent={TrendingItemSeparator}
-                    extraData={savePending}
+                    extraData={pendingIds}
+                    getItemLayout={(_data, index) => ({
+                      length: trendingCardWidth,
+                      offset: (trendingCardWidth + TRENDING_CARD_SEPARATOR_WIDTH) * index,
+                      index,
+                    })}
                   />
                 </View>
               ) : null}
@@ -528,7 +567,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   trendingItemSep: {
-    width: 14,
+    width: TRENDING_CARD_SEPARATOR_WIDTH,
   },
   trendingSkeletonRow: {
     flexDirection: 'row',
@@ -762,9 +801,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 14,
-  },
-  cardPressed: {
-    opacity: 0.94,
   },
   iconPressed: {
     opacity: 0.65,
