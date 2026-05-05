@@ -59,32 +59,40 @@ export async function toggleSaved(festivalId: string): Promise<{ saved: boolean 
 }
 
 export async function getSavedFestivals(): Promise<FestivalListItem[]> {
-  const res = await apiFetch('/api/plan/festivals');
-  const body = await readJson(res);
-  if (!res.ok) {
-    throw new Error(readErrorMessage(body, res.status));
+  try {
+    const res = await apiFetch('/api/plan/festivals');
+    const body = await readJson(res);
+
+    if (!res.ok) {
+      console.error('[SAVED API ERROR]', res.status);
+      throw new Error(readErrorMessage(body, res.status));
+    }
+
+    const record = asRecord(body);
+    const list = Array.isArray(body)
+      ? body
+      : Array.isArray(record?.festivals)
+        ? record.festivals
+        : Array.isArray(record?.data)
+          ? record.data
+          : [];
+    if (!Array.isArray(list)) return [];
+
+    const normalizedList = list.map((item) => {
+      const recordItem = asRecord(item);
+      if (!recordItem) return item;
+      return {
+        ...recordItem,
+        festivalId: recordItem.id ?? recordItem.festivalId ?? recordItem.festival_id,
+      };
+    });
+
+    return normalizedList
+      .map(parseListItem)
+      .filter((item): item is FestivalListItem => item != null)
+      .map((item) => ({ ...item, festivalId: item.festivalId }));
+  } catch (e) {
+    console.error('[SAVED FETCH FAILED]', e);
+    throw e;
   }
-  const record = asRecord(body);
-  const list = Array.isArray(body)
-    ? body
-    : Array.isArray(record?.festivals)
-      ? record.festivals
-      : Array.isArray(record?.data)
-        ? record.data
-        : [];
-  if (!Array.isArray(list)) return [];
-
-  const normalizedList = list.map((item) => {
-    const recordItem = asRecord(item);
-    if (!recordItem) return item;
-    return {
-      ...recordItem,
-      festivalId: recordItem.id ?? recordItem.festivalId ?? recordItem.festival_id,
-    };
-  });
-
-  return normalizedList
-    .map(parseListItem)
-    .filter((item): item is FestivalListItem => item != null)
-    .map((item) => ({ ...item, festivalId: item.festivalId }));
 }
