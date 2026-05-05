@@ -30,9 +30,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth
       .getSession()
-      .then(({ data: { session } }) => {
+      .then(({ data }) => {
         if (!active) return;
-        setUser(session?.user ?? null);
+        console.log('[TOKEN DEBUG]', data.session?.access_token);
+        setUser(data.session?.user ?? null);
       })
       .catch(() => {
         if (!active) return;

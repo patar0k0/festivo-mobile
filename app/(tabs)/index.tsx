@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { FestivalListItem } from '@/lib/api/festivals';
@@ -12,6 +13,7 @@ import {
   OutlinedActionButton,
 } from '@/components/ui/FestivalCard';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
+import { getAccessToken } from '@/lib/auth/useAuth';
 
 function toDateOnly(value: Date): string {
   return value.toISOString().slice(0, 10);
@@ -51,6 +53,13 @@ export default function Index() {
   const router = useRouter();
   const toggleSavedMutation = useToggleSavedMutation();
   const { startDate, endDate } = thisWeekRange();
+
+  useEffect(() => {
+    void (async () => {
+      const token = await getAccessToken();
+      console.log('[TOKEN FROM APP]', token);
+    })();
+  }, []);
 
   const popularQuery = useQuery({
     queryKey: ['festivals', 'popular'],
