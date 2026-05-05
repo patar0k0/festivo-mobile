@@ -1,10 +1,10 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import { apiFetch } from '@/lib/api/client';
 import { getAccessToken } from '@/lib/auth/useAuth';
+import { loadNotifications } from '@/lib/push/loadNotifications';
 
 type PushPlatform = 'ios' | 'android';
 
@@ -20,6 +20,9 @@ export async function registerPush(): Promise<void> {
   }
 
   try {
+    const Notifications = await loadNotifications();
+    if (!Notifications) return;
+
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
       return;
     }

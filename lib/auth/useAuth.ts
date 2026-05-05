@@ -24,14 +24,20 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  console.log('[auth] init');
 
   useEffect(() => {
     let active = true;
+    const loadingTimeout = setTimeout(() => {
+      if (!active) return;
+      setLoading(false);
+    }, 2000);
 
     supabase.auth
       .getSession()
       .then(({ data: { session } }) => {
         if (!active) return;
+        console.log('[auth] session:', session);
         setUser(session?.user ?? null);
       })
       .catch(() => {
@@ -45,12 +51,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[auth] change:', event, session);
       setUser(session?.user ?? null);
     });
 
     return () => {
       active = false;
+      clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -68,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({ user, loading, login, logout }),
     [user, loading, login, logout]
   );
+  console.log('[auth] loading:', loading);
 
   return createElement(AuthContext.Provider, { value }, children);
 }
