@@ -1,9 +1,12 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { FestivalListItem } from '@/lib/api/festivals';
+import { getRelativeDateLabel, getStartsInLabelBg } from '@/lib/festival/relativeDate';
 
 const colors = {
   text: '#111827',
@@ -36,33 +39,25 @@ type FestivalCardProps = {
   onPressSave: () => void;
   /** Wider fixed width for horizontal carousels */
   variant?: 'default' | 'carousel';
+  saveDisabled?: boolean;
 };
-
-function getStartsInText(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfTarget = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffDays = Math.ceil((startOfTarget.getTime() - startOfToday.getTime()) / 86400000);
-  if (diffDays <= 0) return 'Started';
-  if (diffDays === 1) return 'Starts in 1 day';
-  return `Starts in ${diffDays} days`;
-}
 
 export function FestivalSaveButton({
   label,
   onPress,
   disabled,
+  loading,
   floating = false,
   floatingLarge = false,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
+  loading?: boolean;
   floating?: boolean;
   floatingLarge?: boolean;
 }) {
+  const showSpinner = Boolean(loading);
   return (
     <Pressable
       disabled={disabled}
@@ -71,25 +66,38 @@ export function FestivalSaveButton({
         styles.saveButton,
         floating && styles.saveButtonFloating,
         floatingLarge && styles.saveButtonFloatingLarge,
-        disabled && styles.saveButtonDisabled,
+        disabled && !showSpinner && styles.saveButtonDisabled,
         pressed && !disabled && styles.saveButtonPressed,
       ]}>
-      <Text style={styles.saveButtonText}>{label}</Text>
+      {showSpinner ? (
+        <ActivityIndicator color={colors.buttonText} size="small" />
+      ) : (
+        <Text style={styles.saveButtonText}>{label}</Text>
+      )}
     </Pressable>
   );
 }
 
-export function FestivalCard({ item, onPressCard, onPressSave, variant = 'default' }: FestivalCardProps) {
-  const saveLabel = item.saved ? 'Reminder set' : 'Remind me';
-  const startsInText = getStartsInText(item.start_date);
+export function FestivalCard({
+  item,
+  onPressCard,
+  onPressSave,
+  variant = 'default',
+  saveDisabled,
+}: FestivalCardProps) {
+  const saveLabel = item.saved ? 'Премахни' : 'Запази';
+  const startsInText = getStartsInLabelBg(item.start_date);
+  const dateLabel = getRelativeDateLabel(item.start_date);
   const lastSaveTapRef = useRef(0);
-  const imageUrl =
+  const rawUrl =
     (item as FestivalListItem & { image_url?: string; imageUrl?: string }).image_url ??
     (item as FestivalListItem & { image_url?: string; imageUrl?: string }).imageUrl;
+  const imageUrl = typeof rawUrl === 'string' && rawUrl.trim() ? rawUrl.trim() : undefined;
   const handleSavePress = () => {
     const now = Date.now();
     if (now - lastSaveTapRef.current < 500) return;
     lastSaveTapRef.current = now;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPressSave();
   };
 
@@ -117,58 +125,113 @@ export function FestivalCard({ item, onPressCard, onPressSave, variant = 'defaul
             {item.city}
           </Text>
           <Text style={styles.heroMeta} numberOfLines={1}>
-            {item.start_date}
+            {dateLabel}
           </Text>
           <Text style={styles.heroMeta} numberOfLines={1}>
             {startsInText}
           </Text>
         </View>
         <View style={styles.heroCtaWrap}>
-          <FestivalSaveButton label={saveLabel} onPress={handleSavePress} floating />
+          {item.saved ? (
+            <View style={styles.heroSavedStack}>
+              <View style={styles.savedBadgeRowLight}>
+                <Ionicons name="bookmark" size={18} color="#FFFFFF" />
+                <Text style={styles.savedBadgeLabelLight}>Запазено</Text>
+              </View>
+              <FestivalSaveButton
+                label={saveLabel}
+                onPress={handleSavePress}
+                floating
+                disabled={saveDisabled}
+                loading={saveDisabled}
+              />
+              <Text style={styles.heroSavedSub}>Ще получиш напомняне</Text>
+            </View>
+          ) : (
+            <FestivalSaveButton
+              label={saveLabel}
+              onPress={handleSavePress}
+              floating
+              disabled={saveDisabled}
+              loading={saveDisabled}
+            />
+          )}
         </View>
-        {item.saved ? <Text style={styles.heroReminderHint}>You'll get notified before it starts</Text> : null}
       </Pressable>
     );
   }
 
   return (
-    <View style={[styles.cardOuter, variant === 'carousel' && styles.cardCarousel]}>
-      <Pressable onPress={onPressCard} style={({ pressed }) => [styles.cardInner, pressed && styles.cardPressed]}>
-        <Text style={typography.title} numberOfLines={2}>
+    <View style={[styles.cardOuter, styles.noImageCard, variant === 'carousel' && styles.cardCarousel]}>
+      <LinearGradient colors={['#F87171', '#E85D5D', '#B91C1C']} style={StyleSheet.absoluteFill} />
+      <View style={styles.noImageEmojiWrap} pointerEvents="none">
+        <Text style={styles.noImageEmoji}>🎉</Text>
+      </View>
+      <LinearGradient
+        colors={['rgba(255,255,255,0.12)', 'rgba(0,0,0,0.25)']}
+        style={StyleSheet.absoluteFill}
+      />
+      <Pressable onPress={onPressCard} style={({ pressed }) => [styles.cardInner, styles.noImageInner, pressed && styles.cardPressed]}>
+        <Text style={styles.noImageTitle} numberOfLines={2}>
           {item.title}
         </Text>
-        <Text style={[typography.secondary, styles.city]} numberOfLines={1}>
+        <Text style={styles.noImageCity} numberOfLines={1}>
           {item.city}
         </Text>
-        <Text style={[typography.muted, styles.date]} numberOfLines={1}>
-          {item.start_date}
+        <Text style={styles.noImageDate} numberOfLines={1}>
+          {dateLabel}
         </Text>
-        <Text style={[typography.muted, styles.startsIn]} numberOfLines={1}>
+        <Text style={styles.noImageStarts} numberOfLines={1}>
           {startsInText}
         </Text>
       </Pressable>
-      <FestivalSaveButton label={saveLabel} onPress={handleSavePress} />
-      {item.saved ? <Text style={styles.reminderHint}>You'll get notified before it starts</Text> : null}
+      {item.saved ? (
+        <View style={styles.savedPlainStack}>
+          <View style={styles.savedBadgeRowDark}>
+            <Ionicons name="bookmark" size={18} color="#FFFFFF" />
+            <Text style={styles.savedBadgeLabelOnGradient}>Запазено</Text>
+          </View>
+          <FestivalSaveButton label={saveLabel} onPress={handleSavePress} disabled={saveDisabled} loading={saveDisabled} />
+          <Text style={styles.reminderHintLight}>Ще получиш напомняне</Text>
+        </View>
+      ) : (
+        <FestivalSaveButton label={saveLabel} onPress={handleSavePress} disabled={saveDisabled} loading={saveDisabled} />
+      )}
     </View>
   );
 }
 
-export function FeaturedFestivalCard({ item, onPressCard, onPressSave }: Omit<FestivalCardProps, 'variant'>) {
-  const saveLabel = item.saved ? 'Reminder set' : 'Remind me';
-  const startsInText = getStartsInText(item.start_date);
+export function FeaturedFestivalCard({
+  item,
+  onPressCard,
+  onPressSave,
+  saveDisabled,
+}: Omit<FestivalCardProps, 'variant'>) {
+  const saveLabel = item.saved ? 'Премахни' : 'Запази';
+  const startsInText = getStartsInLabelBg(item.start_date);
+  const dateLabel = getRelativeDateLabel(item.start_date);
   const lastSaveTapRef = useRef(0);
-  const imageUrl =
+  const rawUrl =
     (item as FestivalListItem & { image_url?: string; imageUrl?: string }).image_url ??
     (item as FestivalListItem & { image_url?: string; imageUrl?: string }).imageUrl;
+  const imageUrl = typeof rawUrl === 'string' && rawUrl.trim() ? rawUrl.trim() : undefined;
   const handleSavePress = () => {
     const now = Date.now();
     if (now - lastSaveTapRef.current < 500) return;
     lastSaveTapRef.current = now;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPressSave();
   };
 
   if (!imageUrl) {
-    return <FestivalCard item={item} onPressCard={onPressCard} onPressSave={onPressSave} />;
+    return (
+      <FestivalCard
+        item={item}
+        onPressCard={onPressCard}
+        onPressSave={onPressSave}
+        saveDisabled={saveDisabled}
+      />
+    );
   }
 
   return (
@@ -187,16 +250,40 @@ export function FeaturedFestivalCard({ item, onPressCard, onPressSave }: Omit<Fe
           {item.city}
         </Text>
         <Text style={styles.featuredMeta} numberOfLines={1}>
-          {item.start_date}
+          {dateLabel}
         </Text>
         <Text style={styles.featuredMeta} numberOfLines={1}>
           {startsInText}
         </Text>
       </View>
       <View style={styles.featuredCtaWrap}>
-        <FestivalSaveButton label={saveLabel} onPress={handleSavePress} floating floatingLarge />
+        {item.saved ? (
+          <View style={styles.featuredSavedStack}>
+            <View style={styles.savedBadgeRowLight}>
+              <Ionicons name="bookmark" size={18} color="#FFFFFF" />
+              <Text style={styles.savedBadgeLabelLight}>Запазено</Text>
+            </View>
+            <FestivalSaveButton
+              label={saveLabel}
+              onPress={handleSavePress}
+              floating
+              floatingLarge
+              disabled={saveDisabled}
+              loading={saveDisabled}
+            />
+            <Text style={styles.featuredSavedSub}>Ще получиш напомняне</Text>
+          </View>
+        ) : (
+          <FestivalSaveButton
+            label={saveLabel}
+            onPress={handleSavePress}
+            floating
+            floatingLarge
+            disabled={saveDisabled}
+            loading={saveDisabled}
+          />
+        )}
       </View>
-      {item.saved ? <Text style={styles.featuredReminderHint}>You'll get notified before it starts</Text> : null}
     </Pressable>
   );
 }
@@ -243,6 +330,44 @@ const styles = StyleSheet.create({
     elevation: 5,
     overflow: 'hidden',
   },
+  noImageCard: {
+    padding: 13,
+    borderColor: 'rgba(185,28,28,0.35)',
+  },
+  noImageInner: {
+    marginBottom: 12,
+  },
+  noImageEmojiWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 36,
+  },
+  noImageEmoji: {
+    fontSize: 56,
+    opacity: 0.95,
+  },
+  noImageTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  noImageCity: {
+    marginTop: 8,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.88)',
+  },
+  noImageDate: {
+    marginTop: 6,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  noImageStarts: {
+    marginTop: 4,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.82)',
+  },
   heroCard: {
     height: 240,
     padding: 0,
@@ -282,14 +407,14 @@ const styles = StyleSheet.create({
     left: 14,
     right: 14,
     bottom: 14,
-    paddingRight: 110,
+    paddingRight: 132,
   },
   featuredContent: {
     position: 'absolute',
     left: 18,
     right: 18,
     bottom: 18,
-    paddingRight: 136,
+    paddingRight: 152,
   },
   heroTitle: {
     color: '#FFFFFF',
@@ -322,27 +447,49 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 12,
     bottom: 12,
+    alignItems: 'flex-end',
+    maxWidth: '46%',
   },
-  heroReminderHint: {
-    position: 'absolute',
-    left: 14,
-    right: 124,
-    bottom: 8,
+  heroSavedStack: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  savedBadgeRowLight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  savedBadgeLabelLight: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  heroSavedSub: {
     color: 'rgba(255,255,255,0.88)',
     fontSize: 11,
+    textAlign: 'right',
   },
   featuredCtaWrap: {
     position: 'absolute',
     right: 14,
     bottom: 14,
+    alignItems: 'flex-end',
+    maxWidth: '48%',
   },
-  featuredReminderHint: {
-    position: 'absolute',
-    left: 18,
-    right: 150,
-    bottom: 10,
+  featuredSavedStack: {
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  featuredSavedSub: {
     color: 'rgba(255,255,255,0.9)',
     fontSize: 12,
+    textAlign: 'right',
   },
   city: {
     marginTop: 8,
@@ -370,7 +517,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(17,24,39,0.95)',
     borderColor: 'rgba(17,24,39,0.95)',
-    minWidth: 92,
+    minWidth: 108,
   },
   saveButtonFloatingLarge: {
     paddingVertical: 10,
@@ -393,6 +540,30 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 12,
     color: colors.secondary,
+  },
+  savedPlainStack: {
+    marginTop: 4,
+    gap: 10,
+  },
+  savedBadgeRowDark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  savedBadgeLabelDark: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  savedBadgeLabelOnGradient: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  reminderHintLight: {
+    marginTop: 8,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.85)',
   },
   sectionTitleMargin: {
     marginBottom: 12,
