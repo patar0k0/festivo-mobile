@@ -14,6 +14,11 @@ function resolveEasProjectId(): string | undefined {
 }
 
 export async function registerPush(): Promise<void> {
+  if (__DEV__) {
+    console.log('[push] disabled in development');
+    return;
+  }
+
   try {
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
       return;

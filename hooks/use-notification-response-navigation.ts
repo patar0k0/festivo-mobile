@@ -51,6 +51,7 @@ export function useNotificationResponseNavigation() {
   const router = useRouter();
 
   useEffect(() => {
+    if (__DEV__) return;
     if (Platform.OS === 'web') return;
 
     let subscription: Notifications.Subscription | undefined;
