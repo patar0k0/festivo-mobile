@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -22,21 +22,20 @@ export const unstable_settings = {
 function AuthNavigationSync() {
   const { user, loading } = useAuth();
   const segments = useSegments();
+  const router = useRouter();
 
   useEffect(() => {
     if (loading) return;
-    console.log('[nav] user:', user);
-    console.log('[nav] segments:', segments);
 
     const root = segments[0];
     const inAuthGroup = root === '(auth)';
 
     if (!user && !inAuthGroup) {
-      // router.replace('/(auth)/login');
+      router.replace('/(auth)/login');
     } else if (user && inAuthGroup) {
-      // router.replace('/(tabs)');
+      router.replace('/(tabs)');
     }
-  }, [user, loading, segments]);
+  }, [user, loading, segments, router]);
 
   useEffect(() => {
     if (!loading) {

@@ -93,17 +93,9 @@ async function readJson(res: Response): Promise<unknown> {
 }
 
 export async function getFestivals(params?: GetFestivalsParams): Promise<FestivalListItem[]> {
+  void params;
   const token = await getAccessToken();
-  const search = new URLSearchParams();
-  if (params?.page != null) search.set('page', String(params.page));
-  if (params?.city) search.set('city', params.city);
-  if (params?.category) search.set('category', params.category);
-  if (params?.saved != null) search.set('saved', String(params.saved));
-  if (params?.limit != null) search.set('limit', String(params.limit));
-  if (params?.startDate) search.set('start_date', params.startDate);
-  if (params?.endDate) search.set('end_date', params.endDate);
-  const qs = search.toString();
-  const path = `/api/mobile/festivals${qs ? `?${qs}` : ''}`;
+  const path = '/api/mobile/festivals?limit=10';
   const res = await apiFetch(path, token ?? undefined);
   if (!res.ok) {
     const body = await readJson(res);
@@ -116,7 +108,9 @@ export async function getFestivals(params?: GetFestivalsParams): Promise<Festiva
   const body = await readJson(res);
   const rawList = Array.isArray(body) ? body : asRecord(body)?.data;
   if (!Array.isArray(rawList)) return [];
-  return rawList.map(parseListItem).filter((x): x is FestivalListItem => x != null);
+  const data = rawList.map(parseListItem).filter((x): x is FestivalListItem => x != null);
+  console.log('festivals:', data);
+  return data;
 }
 
 export async function getFestival(slug: string): Promise<FestivalDetail> {

@@ -11,7 +11,6 @@ export async function apiFetch(path: string, token?: string, init?: RequestInit)
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  console.log('[api] request:', path);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
@@ -20,7 +19,6 @@ export async function apiFetch(path: string, token?: string, init?: RequestInit)
       headers,
       signal: controller.signal,
     });
-    console.log('[api] response status:', res.status);
     return res;
   } finally {
     clearTimeout(timeout);
