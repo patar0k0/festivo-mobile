@@ -64,7 +64,27 @@ export async function getSavedFestivals(): Promise<FestivalListItem[]> {
   if (!res.ok) {
     throw new Error(readErrorMessage(body, res.status));
   }
-  const payload = asRecord(body)?.data ?? body;
-  if (!Array.isArray(payload)) return [];
-  return payload.map(parseListItem).filter((item): item is FestivalListItem => item != null);
+  const record = asRecord(body);
+  const list = Array.isArray(body)
+    ? body
+    : Array.isArray(record?.festivals)
+      ? record.festivals
+      : Array.isArray(record?.data)
+        ? record.data
+        : [];
+  if (!Array.isArray(list)) return [];
+
+  const normalizedList = list.map((item) => {
+    const recordItem = asRecord(item);
+    if (!recordItem) return item;
+    return {
+      ...recordItem,
+      festivalId: recordItem.id ?? recordItem.festivalId ?? recordItem.festival_id,
+    };
+  });
+
+  return normalizedList
+    .map(parseListItem)
+    .filter((item): item is FestivalListItem => item != null)
+    .map((item) => ({ ...item, festivalId: item.festivalId }));
 }

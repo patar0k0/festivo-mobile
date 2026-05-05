@@ -13,6 +13,18 @@ export default function SavedScreen() {
     queryKey: ['savedFestivals'],
     queryFn: () => getSavedFestivals(),
   });
+  console.log('[SAVED RAW]', data);
+
+  const savedItems = (data ?? []).map((item: any) => ({
+    festivalId: item.festivalId ?? item.id ?? item.festival_id,
+    title: item.title,
+    slug: item.slug,
+    city: item.city,
+    start_date: item.start_date,
+    saved: true,
+  }));
+
+  const validItems = savedItems.filter((i) => i.festivalId);
 
   if (isPending) {
     return (
@@ -34,7 +46,7 @@ export default function SavedScreen() {
     );
   }
 
-  if (!data?.length) {
+  if (validItems.length === 0) {
     return (
       <View style={styles.screenContent}>
         <Text style={festivalUi.typography.sectionTitle}>Saved</Text>
@@ -48,8 +60,8 @@ export default function SavedScreen() {
 
   return (
     <FlatList
-      data={data}
-      keyExtractor={(item) => item.slug}
+      data={validItems}
+      keyExtractor={(item) => item.festivalId}
       contentContainerStyle={styles.listContent}
       ItemSeparatorComponent={() => <View style={{ height: festivalUi.cardGap }} />}
       ListHeaderComponent={
