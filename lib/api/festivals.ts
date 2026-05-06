@@ -32,6 +32,13 @@ export type FestivalDetail = {
   start_date: string;
   end_date?: string;
   saved: boolean;
+  /** Cover / hero URL when API provides images */
+  image_url?: string | null;
+  /** Gallery URLs (detail payload `images[]`) */
+  gallery_urls?: string[];
+  organizer_name?: string;
+  start_time?: string | null;
+  end_time?: string | null;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -69,18 +76,60 @@ function parseListItem(raw: unknown): FestivalListItem | null {
 
 function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
   const o = asRecord(raw) ?? {};
+  const dates = asRecord(o.dates);
+
   const festivalId = String(o.festivalId ?? o.festival_id ?? o.id ?? '');
   const slug = String(o.slug ?? fallbackSlug);
   const title = String(o.title ?? '');
   const description = String(o.description ?? '');
   const city = String(o.city ?? '');
-  const start_date = String(o.start_date ?? o.startDate ?? '');
+
+  const startRaw = o.start_date ?? o.startDate ?? dates?.start_date ?? dates?.startDate;
+  const start_date = startRaw != null ? String(startRaw) : '';
+
+  const endRaw = o.end_date ?? o.endDate ?? dates?.end_date ?? dates?.endDate;
   const end_date =
-    o.end_date != null
-      ? String(o.end_date)
-      : o.endDate != null
-        ? String(o.endDate)
-        : undefined;
+    endRaw != null && String(endRaw).trim() ? String(endRaw) : undefined;
+
+  const start_time =
+    dates?.start_time != null
+      ? String(dates.start_time)
+      : o.start_time != null
+        ? String(o.start_time)
+        : null;
+  const end_time =
+    dates?.end_time != null
+      ? String(dates.end_time)
+      : o.end_time != null
+        ? String(o.end_time)
+        : null;
+
+  const gallery_urls: string[] = [];
+  if (Array.isArray(o.images)) {
+    for (const img of o.images) {
+      const r = asRecord(img);
+      const u = r?.url;
+      if (typeof u === 'string' && u.trim()) {
+        gallery_urls.push(u.trim());
+      }
+    }
+  }
+
+  const imageRaw = o.image_url ?? o.imageUrl;
+  let image_url: string | null =
+    typeof imageRaw === 'string' && imageRaw.trim()
+      ? imageRaw.trim()
+      : imageRaw != null
+        ? String(imageRaw)
+        : null;
+  if (!image_url && gallery_urls.length > 0) {
+    image_url = gallery_urls[0];
+  }
+
+  const org = asRecord(o.organizer);
+  const organizer_name =
+    org?.name != null && String(org.name).trim() ? String(org.name) : undefined;
+
   return {
     festivalId,
     slug,
@@ -90,6 +139,11 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
     start_date,
     end_date,
     saved: Boolean(o.saved ?? o.is_saved ?? o.isSaved),
+    image_url,
+    gallery_urls: gallery_urls.length > 0 ? gallery_urls : undefined,
+    organizer_name,
+    start_time: start_time?.trim() ? start_time : null,
+    end_time: end_time?.trim() ? end_time : null,
   };
 }
 

@@ -1,31 +1,31 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import * as Haptics from 'expo-haptics';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ListRenderItemInfo, SectionListRenderItemInfo, StyleProp, ViewStyle } from 'react-native';
 import {
-  ActivityIndicator,
-  Animated,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  SectionList,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
+    ActivityIndicator,
+    Animated,
+    FlatList,
+    Pressable,
+    RefreshControl,
+    SectionList,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { FestivalListItem } from '@/lib/api/festivals';
-import { getFestivals, getFestivalBySlug } from '@/lib/api/festivals';
-import { formatDateRangeRelative, getRelativeDateLabel } from '@/lib/festival/relativeDate';
 import { festivalUi } from '@/components/ui/FestivalCard';
-import { queryClient } from '@/lib/queryClient';
+import type { FestivalListItem } from '@/lib/api/festivals';
+import { getFestivalBySlug, getFestivals } from '@/lib/api/festivals';
+import { formatDateRangeRelative, getRelativeDateLabel } from '@/lib/festival/relativeDate';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
+import { queryClient } from '@/lib/queryClient';
 
 const COLORS = festivalUi.colors;
 
@@ -413,7 +413,14 @@ export default function HomeScreen() {
   const popular = popularQuery.data ?? [];
 
   const trendingIds = new Set(trending.map((i) => i.festivalId));
-  const weekFiltered = week.filter((i) => !trendingIds.has(i.festivalId));
+
+  const weekFilteredRaw = week.filter((i) => !trendingIds.has(i.festivalId));
+
+  // Smarter fallback — avoids full duplication vs trending; caps fallback list size.
+  const MIN_ITEMS = 3;
+
+  const weekFiltered =
+    weekFilteredRaw.length >= MIN_ITEMS ? weekFilteredRaw : week.slice(0, MIN_ITEMS);
 
   const showTrending =
     trendingQuery.isError || trending.length > 0 || trendingQuery.isLoading;
