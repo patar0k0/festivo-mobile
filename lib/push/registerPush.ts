@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 
 import { apiFetch } from '@/lib/api/client';
 import { getAccessToken } from '@/lib/auth/useAuth';
+import { isExpoGo } from '@/lib/push/isExpoGo';
 import { loadNotifications } from '@/lib/push/loadNotifications';
 
 type PushPlatform = 'ios' | 'android';
@@ -14,8 +15,10 @@ function resolveEasProjectId(): string | undefined {
 }
 
 export async function registerPush(): Promise<void> {
-  if (__DEV__) {
-    console.log('[push] disabled in development');
+  if (isExpoGo) {
+    if (__DEV__) {
+      console.log('[notifications] push registration skipped in Expo Go');
+    }
     return;
   }
 

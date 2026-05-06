@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
@@ -37,18 +37,11 @@ export default function ProfileScreen() {
 
       <View style={styles.settingsCard}>
         {SETTINGS_ROWS.map((row, index) => (
-          <Pressable
+          <View
             key={row.key}
-            style={({ pressed }) => [
-              styles.settingsRow,
-              index < SETTINGS_ROWS.length - 1 && styles.settingsRowBorder,
-              pressed && styles.settingsRowPressed,
-            ]}>
+            style={[styles.settingsRow, index < SETTINGS_ROWS.length - 1 && styles.settingsRowBorder]}>
             <Text style={styles.settingsRowLabel}>{row.label}</Text>
-            <View style={styles.settingsChevronWrap}>
-              <Ionicons name="chevron-forward" size={18} color={festivalUi.colors.muted} />
-            </View>
-          </Pressable>
+          </View>
         ))}
       </View>
     </View>
@@ -119,23 +112,17 @@ const styles = StyleSheet.create({
   settingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 56,
+    minHeight: 56,
+    paddingVertical: 16,
     paddingHorizontal: 16,
   },
   settingsRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
   },
-  settingsRowPressed: {
-    opacity: 0.72,
-  },
   settingsRowLabel: {
     fontSize: 16,
     fontWeight: '500',
     color: festivalUi.colors.text,
-  },
-  settingsChevronWrap: {
-    opacity: 0.55,
   },
 });

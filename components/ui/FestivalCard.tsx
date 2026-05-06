@@ -98,7 +98,7 @@ export function FestivalCard({
   const imageUrl = typeof rawUrl === 'string' && rawUrl.trim() ? rawUrl.trim() : undefined;
   const handleSavePress = () => {
     const now = Date.now();
-    if (now - lastSaveTapRef.current < 500) return;
+    if (now - lastSaveTapRef.current < 280) return;
     lastSaveTapRef.current = now;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPressSave();
@@ -281,7 +281,7 @@ export function FeaturedFestivalCard({
   const imageUrl = typeof rawUrl === 'string' && rawUrl.trim() ? rawUrl.trim() : undefined;
   const handleSavePress = () => {
     const now = Date.now();
-    if (now - lastSaveTapRef.current < 500) return;
+    if (now - lastSaveTapRef.current < 280) return;
     lastSaveTapRef.current = now;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPressSave();

@@ -1,4 +1,6 @@
+import { isExpoGo } from '@/lib/push/isExpoGo';
+
 export async function loadNotifications() {
-  if (__DEV__) return null;
+  if (isExpoGo) return null;
   return await import('expo-notifications');
 }

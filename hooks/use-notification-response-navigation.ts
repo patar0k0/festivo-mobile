@@ -2,6 +2,8 @@ import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
+import { isExpoGo } from '@/lib/push/isExpoGo';
+
 function parseFestivalSlugFromData(data: unknown): string | null {
   if (data == null || typeof data !== 'object') return null;
   const record = data as Record<string, unknown>;
@@ -37,6 +39,9 @@ function navigateFromResponse(
   const data = response.notification.request.content.data;
   const slug = parseFestivalSlugFromData(data);
   if (!slug) return;
+  if (__DEV__) {
+    console.log('[festivo] notification open festival', { slug });
+  }
   try {
     router.push(`/festival/${slug}`);
   } catch {
@@ -52,8 +57,7 @@ export function useNotificationResponseNavigation() {
   const router = useRouter();
 
   useEffect(() => {
-    if (__DEV__) return;
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || isExpoGo) return;
 
     let active = true;
     let removeListener: (() => void) | undefined;

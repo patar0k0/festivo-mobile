@@ -1,13 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   LayoutAnimation,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -27,6 +30,7 @@ const HERO_H = Platform.OS === 'android' ? 250 : 286;
 const GALLERY_H = 120;
 const CTA_H = 50;
 const DESC_COLLAPSED_LINES = 7;
+const SAVE_PENDING_MS = 25000;
 
 const HERO_PALETTE = ['#4F46E5', '#0EA5E9', '#059669', '#D97706', '#7C3AED', '#DB2777'];
 
@@ -77,37 +81,85 @@ function quickDurationLabel(d: FestivalDetail): string | null {
 
 function HeroBookmarkButton({
   filled,
-  disabled,
-  isSaving,
+  isBusy,
   onPress,
   top,
   right,
 }: {
   filled: boolean;
-  disabled?: boolean;
-  isSaving?: boolean;
+  isBusy?: boolean;
   onPress: () => void;
   top: number;
   right: number;
 }) {
   return (
     <Pressable
-      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.heroBookmark,
         { top, right },
-        disabled && !isSaving && styles.heroBookmarkDisabled,
-        isSaving && styles.heroBookmarkSaving,
-        pressed && !disabled && styles.heroBookmarkPressed,
+        isBusy && styles.heroBookmarkSaving,
+        pressed && !isBusy && styles.heroBookmarkPressed,
+        { transform: [{ scale: pressed ? 0.92 : isBusy ? 0.96 : 1 }] },
       ]}
       hitSlop={8}>
-      {isSaving ? (
+      {isBusy ? (
         <ActivityIndicator size="small" color="#FFFFFF" />
       ) : (
         <Ionicons name={filled ? 'bookmark' : 'bookmark-outline'} size={22} color="#FFFFFF" />
       )}
     </Pressable>
+  );
+}
+
+function GalleryLightbox({
+  visible,
+  uri,
+  onClose,
+  insetTop,
+  fadeAnim,
+}: {
+  visible: boolean;
+  uri: string | null;
+  onClose: () => void;
+  insetTop: number;
+  fadeAnim: Animated.Value;
+}) {
+  useEffect(() => {
+    if (!__DEV__) return;
+    console.log('[festivo] gallery modal layer', { visible, hasUri: Boolean(uri) });
+  }, [visible, uri]);
+
+  if (!uri) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
+      <Animated.View style={[styles.lightboxRoot, { opacity: fadeAnim }]} pointerEvents="box-none">
+        <Pressable
+          style={styles.lightboxBackdrop}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Затвори"
+        />
+        <View style={styles.lightboxContent} pointerEvents="box-none">
+          <Pressable
+            onPress={onClose}
+            style={[styles.lightboxClose, { top: insetTop + 10 }]}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Затвори">
+            <Ionicons name="close" size={26} color="#FFFFFF" />
+          </Pressable>
+          <ExpoImage
+            source={{ uri }}
+            style={styles.lightboxImage}
+            contentFit="contain"
+            transition={200}
+            cachePolicy="memory-disk"
+          />
+        </View>
+      </Animated.View>
+    </Modal>
   );
 }
 
@@ -118,6 +170,13 @@ export default function FestivalDetailScreen() {
   const toggleSavedMutation = useToggleSavedMutation();
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [galleryVisible, setGalleryVisible] = useState(false);
+  const [selectedGalleryUri, setSelectedGalleryUri] = useState<string | null>(null);
+  const galleryFade = useRef(new Animated.Value(0)).current;
+  /** When true, a close animation must not tear down state (user reopened or screen still showing). */
+  const lightboxOpenIntentRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const pendingClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['festival', slug],
@@ -125,15 +184,103 @@ export default function FestivalDetailScreen() {
     enabled: Boolean(slug),
   });
 
+  useEffect(() => {
+    return () => {
+      if (pendingClearTimeoutRef.current) {
+        clearTimeout(pendingClearTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        galleryFade.stopAnimation();
+        lightboxOpenIntentRef.current = false;
+        setGalleryVisible(false);
+        setSelectedGalleryUri(null);
+        galleryFade.setValue(0);
+        if (__DEV__) {
+          console.log('[festivo] gallery lightbox reset on screen blur');
+        }
+      };
+    }, [galleryFade]),
+  );
+
+  const clearSavePending = useCallback((festivalId: string) => {
+    saveInFlightRef.current = false;
+    if (pendingClearTimeoutRef.current) {
+      clearTimeout(pendingClearTimeoutRef.current);
+      pendingClearTimeoutRef.current = null;
+    }
+    setPendingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(festivalId);
+      return next;
+    });
+  }, []);
+
   const toggleDescriptionExpanded = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setDescriptionExpanded((v) => !v);
   };
 
+  const openGallery = useCallback(
+    (uri: string) => {
+      lightboxOpenIntentRef.current = true;
+      setSelectedGalleryUri(uri);
+      setGalleryVisible(true);
+      galleryFade.setValue(0);
+      Animated.timing(galleryFade, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    },
+    [galleryFade],
+  );
+
+  const closeGallery = useCallback(() => {
+    lightboxOpenIntentRef.current = false;
+    Animated.timing(galleryFade, {
+      toValue: 0,
+      duration: 160,
+      useNativeDriver: true,
+    }).start(() => {
+      if (lightboxOpenIntentRef.current) {
+        return;
+      }
+      setGalleryVisible(false);
+      setSelectedGalleryUri(null);
+      galleryFade.setValue(0);
+    });
+  }, [galleryFade]);
+
   const onToggleSave = useCallback(
     (festival: FestivalDetail) => {
       const id = festival.festivalId;
+      if (saveInFlightRef.current) {
+        if (__DEV__) {
+          console.log('[festivo] detail save ignored (in flight)', { slug: festival.slug, festivalId: id });
+        }
+        return;
+      }
+      if (__DEV__) {
+        console.log('[festivo] detail save pressed', { slug: festival.slug, festivalId: id });
+        console.log('[festivo] detail save mutation start', { slug: festival.slug, festivalId: id });
+      }
+      saveInFlightRef.current = true;
       setPendingIds((prev) => new Set(prev).add(id));
+      if (pendingClearTimeoutRef.current) {
+        clearTimeout(pendingClearTimeoutRef.current);
+      }
+      pendingClearTimeoutRef.current = setTimeout(() => {
+        if (__DEV__) {
+          console.log('[festivo] detail save pending timeout cleanup', { festivalId: id });
+        }
+        clearSavePending(id);
+      }, SAVE_PENDING_MS);
+
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       toggleSavedMutation.mutate(
         {
@@ -143,16 +290,15 @@ export default function FestivalDetailScreen() {
         },
         {
           onSettled: () => {
-            setPendingIds((prev) => {
-              const next = new Set(prev);
-              next.delete(id);
-              return next;
-            });
+            if (__DEV__) {
+              console.log('[festivo] detail save pendingIds cleanup (settled)', { festivalId: id });
+            }
+            clearSavePending(id);
           },
         },
       );
     },
-    [toggleSavedMutation],
+    [toggleSavedMutation, clearSavePending],
   );
 
   const bookmarkTop = insets.top + 10;
@@ -217,6 +363,13 @@ export default function FestivalDetailScreen() {
 
   return (
     <View style={styles.root}>
+      <GalleryLightbox
+        visible={galleryVisible}
+        uri={selectedGalleryUri}
+        onClose={closeGallery}
+        insetTop={insets.top}
+        fadeAnim={galleryFade}
+      />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -237,11 +390,12 @@ export default function FestivalDetailScreen() {
             <View style={[styles.heroFallback, { backgroundColor: heroFallbackColor(data.slug) }]} />
           )}
           <LinearGradient
+            pointerEvents="none"
             colors={['transparent', 'rgba(0,0,0,0.38)', 'rgba(0,0,0,0.72)']}
             locations={[0, 0.42, 1]}
             style={StyleSheet.absoluteFill}
           />
-          <View style={styles.heroTextBlock}>
+          <View pointerEvents="none" style={styles.heroTextBlock}>
             <Text style={styles.heroTitle} numberOfLines={2}>
               {data.title}
             </Text>
@@ -264,8 +418,7 @@ export default function FestivalDetailScreen() {
           </View>
           <HeroBookmarkButton
             filled={data.saved}
-            disabled={isSaving}
-            isSaving={isSaving}
+            isBusy={isSaving}
             onPress={() => onToggleSave(data)}
             top={bookmarkTop}
             right={bookmarkRight}
@@ -275,12 +428,20 @@ export default function FestivalDetailScreen() {
         {/* Primary CTA */}
         <View style={styles.ctaBlock}>
           <Pressable
-            disabled={isSaving}
-            onPress={() => onToggleSave(data)}
+            onPress={() => {
+              if (__DEV__) {
+                console.log('[festivo] detail primary CTA press');
+              }
+              onToggleSave(data);
+            }}
             style={({ pressed }) => [
               styles.primaryCta,
-              pressed && !isSaving && styles.primaryCtaPressed,
-              isSaving && styles.primaryCtaSaving,
+              {
+                opacity: isSaving ? 0.88 : pressed ? 0.9 : 1,
+                transform: [
+                  { scale: pressed && !isSaving ? 0.97 : isSaving ? 0.985 : 1 },
+                ],
+              },
             ]}>
             {isSaving ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
@@ -339,13 +500,12 @@ export default function FestivalDetailScreen() {
           </View>
         ) : null}
 
-        {/* Organizer */}
+        {/* Organizer — informational only */}
         {data.organizer_name ? (
           <View style={styles.blockPad}>
             <Text style={styles.sectionLabel}>Организатор</Text>
             <View style={styles.organizerCard}>
               <Text style={styles.organizerName}>{data.organizer_name}</Text>
-              <Ionicons name="chevron-forward" size={18} color={festivalUi.colors.muted} />
             </View>
           </View>
         ) : null}
@@ -356,17 +516,26 @@ export default function FestivalDetailScreen() {
             <Text style={[styles.sectionLabel, styles.galleryHeading]}>Снимки</Text>
             <ScrollView
               horizontal
+              keyboardShouldPersistTaps="handled"
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.galleryScroll}>
               {galleryStrip.map((uri, index) => (
-                <ExpoImage
+                <Pressable
                   key={`${uri}-${index}`}
-                  source={{ uri }}
-                  style={[styles.galleryThumb, index < galleryStrip.length - 1 && styles.galleryThumbSep]}
-                  contentFit="cover"
-                  transition={160}
-                  cachePolicy="memory-disk"
-                />
+                  onPress={() => openGallery(uri)}
+                  style={({ pressed }) => [
+                    styles.galleryThumbPressable,
+                    index < galleryStrip.length - 1 && styles.galleryThumbSep,
+                    pressed && styles.galleryThumbPressed,
+                  ]}>
+                  <ExpoImage
+                    source={{ uri }}
+                    style={styles.galleryThumbImage}
+                    contentFit="cover"
+                    transition={160}
+                    cachePolicy="memory-disk"
+                  />
+                </Pressable>
               ))}
             </ScrollView>
           </View>
@@ -446,14 +615,42 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
   },
-  heroBookmarkDisabled: {
-    opacity: 0.45,
-  },
   heroBookmarkSaving: {
-    opacity: 0.72,
+    opacity: 0.85,
   },
   heroBookmarkPressed: {
     opacity: 0.88,
+  },
+  lightboxRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.96)',
+  },
+  lightboxBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  lightboxContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  lightboxClose: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  lightboxImage: {
+    width: '100%',
+    height: '78%',
+    maxHeight: 640,
   },
   ctaBlock: {
     paddingHorizontal: festivalUi.screenPadding,
@@ -469,12 +666,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderWidth: 1,
     borderColor: '#111827',
-  },
-  primaryCtaPressed: {
-    opacity: 0.88,
-  },
-  primaryCtaSaving: {
-    opacity: 0.85,
   },
   ctaIcon: {
     marginRight: 8,
@@ -535,7 +726,7 @@ const styles = StyleSheet.create({
   organizerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 16,
@@ -559,15 +750,22 @@ const styles = StyleSheet.create({
   galleryScroll: {
     paddingHorizontal: festivalUi.screenPadding,
     paddingTop: 4,
+    gap: 12,
   },
-  galleryThumb: {
+  galleryThumbPressable: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+  },
+  galleryThumbImage: {
     width: 168,
     height: GALLERY_H,
-    borderRadius: 14,
-    backgroundColor: '#F3F4F6',
   },
   galleryThumbSep: {
     marginRight: 12,
+  },
+  galleryThumbPressed: {
+    opacity: 0.88,
   },
   scrollContentBottom: {
     paddingBottom: 40,

@@ -189,17 +189,22 @@ function TrendingCard({
           />
         ) : (
           <>
-            <LinearGradient colors={['#F87171', '#E85D5D', '#9B1C1C']} style={StyleSheet.absoluteFill} />
+            <LinearGradient
+              pointerEvents="none"
+              colors={['#F87171', '#E85D5D', '#9B1C1C']}
+              style={StyleSheet.absoluteFill}
+            />
             <View style={styles.imageFallbackEmojiWrap} pointerEvents="none">
               <Text style={styles.imageFallbackEmoji}>🎉</Text>
             </View>
           </>
         )}
         <LinearGradient
+          pointerEvents="none"
           colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.52)']}
           style={StyleSheet.absoluteFill}
         />
-        <View style={styles.trendingTextOverlay}>
+        <View pointerEvents="none" style={styles.trendingTextOverlay}>
           <Text style={styles.trendingTitle} numberOfLines={2}>
             {item.title}
           </Text>
@@ -253,7 +258,10 @@ function CompactWeekCard({
             priority="high"
           />
         ) : (
-          <LinearGradient colors={['#E85D5D', '#B91C1C']} style={StyleSheet.absoluteFill}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={['#E85D5D', '#B91C1C']}
+            style={StyleSheet.absoluteFill}>
             <Text style={styles.thumbFallbackEmoji}>🎉</Text>
           </LinearGradient>
         )}
@@ -329,7 +337,10 @@ function PopularCard({
               priority="high"
             />
           ) : (
-            <LinearGradient colors={['#E85D5D', '#B91C1C']} style={StyleSheet.absoluteFill}>
+            <LinearGradient
+              pointerEvents="none"
+              colors={['#E85D5D', '#B91C1C']}
+              style={StyleSheet.absoluteFill}>
               <Text style={styles.thumbFallbackEmojiSm}>🎉</Text>
             </LinearGradient>
           )}
@@ -451,6 +462,9 @@ export default function HomeScreen() {
 
   const openFestival = useCallback(
     (item: FestivalListItem) => {
+      if (__DEV__) {
+        console.log('[festivo] home open festival', { slug: item.slug, festivalId: item.festivalId });
+      }
       const existing = queryClient.getQueryData(['festival', item.slug]);
       if (!existing) {
         void queryClient.prefetchQuery({
@@ -467,6 +481,9 @@ export default function HomeScreen() {
 
   const onSave = useCallback(
     (item: FestivalListItem) => {
+      if (__DEV__) {
+        console.log('[festivo] home save toggle', { slug: item.slug, festivalId: item.festivalId });
+      }
       const id = item.festivalId;
       setPendingIds((prev) => new Set(prev).add(id));
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -535,6 +552,7 @@ export default function HomeScreen() {
       keyExtractor={(item) => item.slug}
       stickySectionHeadersEnabled={false}
       nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
       extraData={pendingIds}
       refreshControl={
         <RefreshControl
@@ -566,10 +584,11 @@ export default function HomeScreen() {
               ) : trendingQuery.isLoading && trending.length === 0 ? (
                 <TrendingSkeleton cardWidth={CARD_WIDTH} />
               ) : showTrendingContent ? (
-                <View style={styles.trendingScrollOuter}>
+                <View style={styles.trendingScrollOuter} pointerEvents="box-none">
                   <FlatList
                     data={trending}
                     horizontal
+                    keyboardShouldPersistTaps="handled"
                     showsHorizontalScrollIndicator={false}
                     decelerationRate="fast"
                     snapToInterval={CARD_WIDTH + TRENDING_CARD_SEPARATOR_WIDTH}

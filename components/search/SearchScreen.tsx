@@ -136,8 +136,19 @@ export default function SearchScreen() {
     setDebounced(t);
   }, []);
 
+  const goBackFromSearch = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
+  }, [router]);
+
   const openFestival = useCallback(
     (item: FestivalListItem) => {
+      if (__DEV__) {
+        console.log('[festivo] search open festival', { slug: item.slug, festivalId: item.festivalId });
+      }
       const existing = queryClient.getQueryData(['festival', item.slug]);
       if (!existing) {
         void queryClient.prefetchQuery({
@@ -154,6 +165,9 @@ export default function SearchScreen() {
 
   const onSave = useCallback(
     (item: FestivalListItem) => {
+      if (__DEV__) {
+        console.log('[festivo] search save toggle', { slug: item.slug, festivalId: item.festivalId });
+      }
       const id = item.festivalId;
       setPendingIds((prev) => new Set(prev).add(id));
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -210,7 +224,7 @@ export default function SearchScreen() {
         <SearchBar
           value={input}
           onChangeText={setInput}
-          onBack={() => router.back()}
+          onBack={goBackFromSearch}
           onClear={() => {
             setInput('');
             setDebounced('');

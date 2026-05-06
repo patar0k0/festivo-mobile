@@ -46,6 +46,10 @@ function buildListItem(source: ToggleSavedInput['festival']): FestivalListItem |
   };
 }
 
+function isFestivalDetailPayload(f: ToggleSavedInput['festival']): f is FestivalDetail {
+  return Boolean(f && typeof f === 'object' && 'description' in f && 'festivalId' in f);
+}
+
 export function useToggleSavedMutation() {
   const queryClient = useQueryClient();
 
@@ -68,9 +72,11 @@ export function useToggleSavedMutation() {
 
       const savedFestivals = queryClient.getQueryData<FestivalListItem[]>(['savedFestivals']);
       const slug = input.slug ?? input.festival?.slug;
-      const festivalDetail = slug
+      const festivalDetailFromCache = slug
         ? queryClient.getQueryData<FestivalDetail>(['festival', slug])
         : undefined;
+      const festivalDetailFromInput = isFestivalDetailPayload(input.festival) ? input.festival : undefined;
+      const festivalDetail = festivalDetailFromCache ?? festivalDetailFromInput;
 
       const flatFestivalLists = festivalQuerySnapshots.flatMap((s) => s.data);
       const inFestivalList = flatFestivalLists.find((item) => matchesFestival(item, input));
@@ -92,6 +98,9 @@ export function useToggleSavedMutation() {
           ...festivalDetail,
           saved: nextSavedState,
         });
+        if (__DEV__) {
+          console.log('[festivo] toggleSaved optimistic detail', { slug, nextSavedState });
+        }
       }
 
       if (savedFestivals) {
@@ -106,7 +115,7 @@ export function useToggleSavedMutation() {
         queryClient.setQueryData<FestivalListItem[]>(['savedFestivals'], nextSaved);
       }
 
-      return { festivalQuerySnapshots, savedFestivals, festivalDetail, slug };
+      return { festivalQuerySnapshots, savedFestivals, festivalDetail: festivalDetailFromCache, slug };
     },
     onError: (_error, _input, context) => {
       if (!context) return;
@@ -123,6 +132,9 @@ export function useToggleSavedMutation() {
       }
     },
     onSettled: () => {
+      if (__DEV__) {
+        console.log('[festivo] toggleSaved mutation settled');
+      }
       queryClient.invalidateQueries({
         predicate: (query) => {
           const key = query.queryKey;
