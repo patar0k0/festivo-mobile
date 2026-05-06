@@ -23,6 +23,14 @@ export type FestivalListItem = {
   end_date?: string;
   image_url?: string | null;
   saved: boolean;
+  /** Optional listing fields for client-side search ranking when API provides them. */
+  saves_count?: number;
+  organizer_name?: string;
+  category?: string;
+  categories?: string[];
+  tags?: string[];
+  is_verified?: boolean;
+  is_vip?: boolean;
 };
 
 export type FestivalDetail = {
@@ -59,6 +67,48 @@ function parseListItem(raw: unknown): FestivalListItem | null {
   if (!festivalId || !slug || !title) return null;
   const endRaw = o.end_date ?? o.endDate;
   const imageRaw = o.image_url ?? o.imageUrl;
+
+  const savesRaw = o.saves_count ?? o.savesCount;
+  let saves_count: number | undefined;
+  if (typeof savesRaw === 'number' && Number.isFinite(savesRaw)) {
+    saves_count = Math.max(0, Math.floor(savesRaw));
+  } else if (typeof savesRaw === 'string' && savesRaw.trim()) {
+    const n = Number(savesRaw);
+    if (Number.isFinite(n)) saves_count = Math.max(0, Math.floor(n));
+  }
+
+  const org = asRecord(o.organizer);
+  const organizer_name =
+    typeof o.organizer_name === 'string' && o.organizer_name.trim()
+      ? o.organizer_name.trim()
+      : typeof o.organizerName === 'string' && o.organizerName.trim()
+        ? o.organizerName.trim()
+        : org?.name != null && String(org.name).trim()
+          ? String(org.name).trim()
+          : undefined;
+
+  const category =
+    typeof o.category === 'string' && o.category.trim() ? o.category.trim() : undefined;
+
+  let categories: string[] | undefined;
+  if (Array.isArray(o.categories)) {
+    const list = o.categories
+      .map((x) => (typeof x === 'string' && x.trim() ? x.trim() : null))
+      .filter((x): x is string => x != null);
+    if (list.length) categories = list;
+  }
+
+  let tags: string[] | undefined;
+  if (Array.isArray(o.tags)) {
+    const list = o.tags
+      .map((x) => (typeof x === 'string' && x.trim() ? x.trim() : null))
+      .filter((x): x is string => x != null);
+    if (list.length) tags = list;
+  }
+
+  const is_verified = Boolean(o.is_verified ?? o.verified ?? o.isVerified);
+  const is_vip = Boolean(o.is_vip ?? o.vip ?? o.isVip);
+
   return {
     festivalId,
     slug,
@@ -73,6 +123,13 @@ function parseListItem(raw: unknown): FestivalListItem | null {
           ? String(imageRaw)
           : null,
     saved: Boolean(o.saved ?? o.is_saved ?? o.isSaved),
+    saves_count,
+    organizer_name,
+    category,
+    categories,
+    tags,
+    is_verified: is_verified || undefined,
+    is_vip: is_vip || undefined,
   };
 }
 

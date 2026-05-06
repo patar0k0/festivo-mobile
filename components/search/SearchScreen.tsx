@@ -269,7 +269,11 @@ export default function SearchScreen() {
           ) : null}
 
           {showGrouped ? (
-            <SectionList<FestivalListItem, GroupedSearchSection>
+            <>
+              <Text style={styles.rankHint} accessibilityRole="text">
+                Подредено по релевантност — най-близките съвпадения и активни събития са отгоре.
+              </Text>
+              <SectionList<FestivalListItem, GroupedSearchSection>
               sections={groupedSections}
               keyExtractor={(item) => item.festivalId}
               renderItem={renderResultRow}
@@ -295,6 +299,7 @@ export default function SearchScreen() {
                 />
               }
             />
+            </>
           ) : null}
         </View>
       ) : null}
@@ -317,6 +322,13 @@ const styles = StyleSheet.create({
   resultsPane: {
     flex: 1,
     paddingHorizontal: festivalUi.screenPadding,
+  },
+  rankHint: {
+    ...festivalUi.typography.secondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 10,
+    opacity: 0.92,
   },
   mutedHint: {
     ...festivalUi.typography.secondary,
