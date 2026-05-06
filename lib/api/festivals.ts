@@ -4,6 +4,8 @@ export type GetFestivalsParams = {
   page?: number | string;
   city?: string;
   category?: string;
+  /** Full-text search (mobile listing `q`) */
+  q?: string;
   saved?: boolean;
   limit?: number;
   startDate?: string;
@@ -164,6 +166,7 @@ export async function getFestivals(params?: GetFestivalsParams): Promise<Festiva
   if (params?.page != null) search.set('page', String(params.page));
   if (params?.city?.trim()) search.set('city', params.city.trim());
   if (params?.category?.trim()) search.set('category', params.category.trim());
+  if (params?.q?.trim()) search.set('q', params.q.trim());
   if (params?.sort) search.set('sort', params.sort);
   if (params?.when) search.set('when', params.when);
   if (params?.startDate?.trim()) search.set('from', params.startDate.trim());

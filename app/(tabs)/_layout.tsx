@@ -6,27 +6,43 @@ export default function TabsGroupLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+        tabBarActiveTintColor: '#111827',
+        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarStyle: {
+          height: 64,
+          paddingTop: 6,
+          paddingBottom: 6,
+          borderTopWidth: 1,
+          borderTopColor: '#EEEEEE',
+          backgroundColor: '#FFFFFF',
+        },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '500' },
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'Начало',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name="home-outline" size={focused ? 24 : 22} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="saved"
         options={{
           title: 'Запазени',
-          tabBarIcon: ({ color, size }) => <Ionicons name="bookmark-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name="bookmark-outline" size={focused ? 24 : 22} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Профил',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name="person-outline" size={focused ? 24 : 22} color={color} />
+          ),
         }}
       />
     </Tabs>

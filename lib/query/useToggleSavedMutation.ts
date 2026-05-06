@@ -54,12 +54,15 @@ export function useToggleSavedMutation() {
     onMutate: async (input): Promise<ToggleSavedContext> => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: ['festivals'] }),
+        queryClient.cancelQueries({ queryKey: ['search'] }),
         queryClient.cancelQueries({ queryKey: ['savedFestivals'] }),
         queryClient.cancelQueries({ queryKey: ['festival'] }),
       ]);
 
-      const festivalQuerySnapshots = queryClient
-        .getQueriesData<FestivalListItem[]>({ queryKey: ['festivals'] })
+      const festivalQuerySnapshots = [
+        ...queryClient.getQueriesData<FestivalListItem[]>({ queryKey: ['festivals'] }),
+        ...queryClient.getQueriesData<FestivalListItem[]>({ queryKey: ['search'] }),
+      ]
         .filter((entry): entry is [QueryKey, FestivalListItem[]] => Array.isArray(entry[1]))
         .map(([queryKey, data]) => ({ queryKey, data }));
 
@@ -121,6 +124,7 @@ export function useToggleSavedMutation() {
     },
     onSettled: (_data, _error, input) => {
       queryClient.invalidateQueries({ queryKey: ['festivals'] });
+      queryClient.invalidateQueries({ queryKey: ['search'] });
       queryClient.invalidateQueries({ queryKey: ['savedFestivals'] });
       if (input.slug ?? input.festival?.slug) {
         queryClient.invalidateQueries({ queryKey: ['festival', input.slug ?? input.festival?.slug] });

@@ -37,8 +37,8 @@ type FestivalCardProps = {
   item: FestivalListItem;
   onPressCard: () => void;
   onPressSave: () => void;
-  /** Wider fixed width for horizontal carousels */
-  variant?: 'default' | 'carousel';
+  /** Wider fixed width for horizontal carousels; compact = light list row (e.g. Saved tab) */
+  variant?: 'default' | 'carousel' | 'compact';
   saveDisabled?: boolean;
 };
 
@@ -49,6 +49,7 @@ export function FestivalSaveButton({
   loading,
   floating = false,
   floatingLarge = false,
+  compact = false,
 }: {
   label: string;
   onPress: () => void;
@@ -56,6 +57,7 @@ export function FestivalSaveButton({
   loading?: boolean;
   floating?: boolean;
   floatingLarge?: boolean;
+  compact?: boolean;
 }) {
   const showSpinner = Boolean(loading);
   return (
@@ -64,6 +66,7 @@ export function FestivalSaveButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.saveButton,
+        compact && styles.saveButtonCompact,
         floating && styles.saveButtonFloating,
         floatingLarge && styles.saveButtonFloatingLarge,
         disabled && !showSpinner && styles.saveButtonDisabled,
@@ -101,6 +104,67 @@ export function FestivalCard({
     onPressSave();
   };
 
+  if (variant === 'compact') {
+    return (
+      <View style={styles.compactSavedCard}>
+        <Pressable
+          onPress={onPressCard}
+          style={({ pressed }) => [styles.compactSavedRow, pressed && styles.cardPressed]}>
+          <View style={styles.compactSavedThumbWrap}>
+            {imageUrl ? (
+              <Image source={{ uri: imageUrl }} style={styles.compactSavedThumb} />
+            ) : (
+              <View style={styles.compactSavedThumbPlaceholder}>
+                <Text style={styles.compactSavedThumbEmoji}>🎉</Text>
+              </View>
+            )}
+            {item.saved ? (
+              <View pointerEvents="none" style={styles.compactThumbBookmark}>
+                <Ionicons name="bookmark" size={18} color={colors.text} />
+              </View>
+            ) : null}
+          </View>
+          <View style={styles.compactSavedBody}>
+            <Text style={styles.compactSavedTitle} numberOfLines={2}>
+              {item.title}
+            </Text>
+            <Text style={styles.compactSavedMetaFirst} numberOfLines={1}>
+              {item.city || 'България'}
+            </Text>
+            <Text style={styles.compactSavedMetaLine} numberOfLines={1}>
+              {dateLabel}
+            </Text>
+            <Text style={styles.compactSavedMetaLine} numberOfLines={1}>
+              {startsInText}
+            </Text>
+          </View>
+        </Pressable>
+        {item.saved ? (
+          <View style={styles.savedCompactStack}>
+            <View style={styles.savedBadgeRowCompact}>
+              <Text style={styles.savedBadgeLabelCompact}>Запазено</Text>
+            </View>
+            <FestivalSaveButton
+              label={saveLabel}
+              onPress={handleSavePress}
+              disabled={saveDisabled}
+              loading={saveDisabled}
+              compact
+            />
+          </View>
+        ) : (
+          <FestivalSaveButton
+            label={saveLabel}
+            onPress={handleSavePress}
+            disabled={saveDisabled}
+            loading={saveDisabled}
+            compact
+          />
+        )}
+      </View>
+    );
+  }
+
   if (imageUrl) {
     return (
       <Pressable
@@ -121,7 +185,7 @@ export function FestivalCard({
           <Text style={styles.heroTitle} numberOfLines={2}>
             {item.title}
           </Text>
-          <Text style={styles.heroMeta} numberOfLines={1}>
+          <Text style={styles.heroMetaFirst} numberOfLines={1}>
             {item.city}
           </Text>
           <Text style={styles.heroMeta} numberOfLines={1}>
@@ -246,7 +310,7 @@ export function FeaturedFestivalCard({
         <Text style={styles.featuredTitle} numberOfLines={2}>
           {item.title}
         </Text>
-        <Text style={styles.featuredMeta} numberOfLines={1}>
+        <Text style={styles.featuredMetaFirst} numberOfLines={1}>
           {item.city}
         </Text>
         <Text style={styles.featuredMeta} numberOfLines={1}>
@@ -317,6 +381,87 @@ export function OutlinedActionButton({
 }
 
 const styles = StyleSheet.create({
+  compactSavedCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  compactSavedRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 8,
+  },
+  compactSavedThumbWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 14,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#F3F4F6',
+  },
+  compactSavedThumb: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F3F4F6',
+  },
+  compactSavedThumbPlaceholder: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactThumbBookmark: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+  },
+  compactSavedThumbEmoji: {
+    fontSize: 36,
+  },
+  compactSavedBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  compactSavedTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  compactSavedMetaFirst: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#666666',
+  },
+  compactSavedMetaLine: {
+    marginTop: 2,
+    fontSize: 13,
+    color: '#666666',
+  },
+  savedCompactStack: {
+    marginTop: 0,
+    gap: 6,
+  },
+  savedBadgeRowCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  savedBadgeLabelCompact: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
   cardOuter: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -421,9 +566,14 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
   },
+  heroMetaFirst: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    marginTop: 6,
+  },
   heroMeta: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 4,
   },
   featuredTitle: {
@@ -431,10 +581,15 @@ const styles = StyleSheet.create({
     fontSize: 25,
     fontWeight: '800',
   },
-  featuredMeta: {
+  featuredMetaFirst: {
     color: 'rgba(255,255,255,0.92)',
     fontSize: 13,
     marginTop: 6,
+  },
+  featuredMeta: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13,
+    marginTop: 4,
   },
   featuredOverlay: {
     position: 'absolute',
@@ -461,9 +616,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   savedBadgeLabelLight: {
     color: '#FFFFFF',
@@ -509,6 +664,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.buttonBg,
     alignItems: 'center',
+  },
+  saveButtonCompact: {
+    minHeight: 38,
+    paddingVertical: 8,
+    justifyContent: 'center',
   },
   saveButtonFloating: {
     alignSelf: 'flex-end',
@@ -566,7 +726,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
   },
   sectionTitleMargin: {
-    marginBottom: 12,
+    marginBottom: 14,
   },
   outlineButton: {
     alignSelf: 'flex-start',

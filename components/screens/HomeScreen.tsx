@@ -195,7 +195,10 @@ function TrendingCard({
             </View>
           </>
         )}
-        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={StyleSheet.absoluteFill} />
+        <LinearGradient
+          colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.52)']}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.trendingTextOverlay}>
           <Text style={styles.trendingTitle} numberOfLines={2}>
             {item.title}
@@ -513,6 +516,9 @@ export default function HomeScreen() {
   const refreshing =
     trendingQuery.isRefetching || weekQuery.isRefetching || popularQuery.isRefetching;
 
+  const weekHeaderBlockInListHeader =
+    (weekQuery.isLoading && week.length === 0) || weekQuery.isError;
+
   return (
     <SectionList<HomeSection['data'][number], HomeSection>
       sections={sections}
@@ -537,7 +543,7 @@ export default function HomeScreen() {
       renderItem={renderSectionItem}
       ListHeaderComponent={
         <View style={styles.headerBlock}>
-          <HomeHeader onSearchPress={() => {}} />
+          <HomeHeader onSearchPress={() => router.push('/search')} />
 
           {showTrending ? (
             <View style={styles.trendingSection}>
@@ -589,14 +595,22 @@ export default function HomeScreen() {
           ) : null}
 
           {popularQuery.isLoading && popular.length === 0 ? (
-            <View style={styles.skeletonSection}>
+            <View
+              style={[
+                styles.skeletonSection,
+                weekHeaderBlockInListHeader ? styles.skeletonSectionAfter : null,
+              ]}>
               <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>⭐ Най-запазвани</Text>
               {[0, 1, 2].map((i) => (
                 <PopularSkeletonRow key={i} />
               ))}
             </View>
           ) : popularQuery.isError ? (
-            <View style={styles.skeletonSection}>
+            <View
+              style={[
+                styles.skeletonSection,
+                weekHeaderBlockInListHeader ? styles.skeletonSectionAfter : null,
+              ]}>
               <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>⭐ Най-запазвани</Text>
               <SectionError message="Не успяхме да заредим секцията." onRetry={() => popularQuery.refetch()} />
             </View>
@@ -612,7 +626,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: festivalUi.screenPadding,
   },
   headerBlock: {
-    marginBottom: 4,
+    marginBottom: 0,
   },
   headerRow: {
     flexDirection: 'row',
@@ -644,13 +658,13 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   sectionTitle: {
-    marginBottom: 12,
+    marginBottom: 14,
   },
   sectionSep: {
-    height: 14,
+    height: 28,
   },
   trendingSection: {
-    marginBottom: 8,
+    marginBottom: 22,
   },
   trendingScrollOuter: {
     marginHorizontal: -festivalUi.screenPadding,
@@ -667,7 +681,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   trendingCardInner: {
-    height: 248,
+    height: 198,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#E5E7EB',
@@ -679,11 +693,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   trendingBookmarkPosition: {
     position: 'absolute',
@@ -709,14 +723,17 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.25)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
   trendingMeta: {
-    marginTop: 4,
+    marginTop: 6,
     color: 'rgba(255,255,255,0.92)',
     fontSize: 13,
   },
   trendingSkeletonCard: {
-    height: 248,
+    height: 198,
     borderRadius: 16,
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
@@ -724,6 +741,9 @@ const styles = StyleSheet.create({
   },
   skeletonSection: {
     marginBottom: 8,
+  },
+  skeletonSectionAfter: {
+    marginTop: 28,
   },
   compactCard: {
     flexDirection: 'row',
@@ -774,15 +794,15 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   compactCity: {
-    marginTop: 4,
+    marginTop: 6,
     fontSize: 13,
     color: '#666666',
   },
   compactDate: {
-    marginTop: 2,
+    marginTop: 4,
     fontSize: 13,
-    color: COLORS.text,
-    fontWeight: '500',
+    color: '#666666',
+    fontWeight: '400',
   },
   compactSave: {
     padding: 4,
@@ -833,9 +853,9 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   popularMeta: {
-    marginTop: 4,
-    fontSize: 12,
-    color: COLORS.secondary,
+    marginTop: 6,
+    fontSize: 13,
+    color: '#666666',
   },
   popularHint: {
     marginTop: 2,

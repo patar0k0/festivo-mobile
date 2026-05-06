@@ -1,9 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
 import { useAuth } from '@/lib/auth/useAuth';
+
+const SETTINGS_ROWS: { key: string; label: string }[] = [
+  { key: 'notifications', label: 'Известия' },
+  { key: 'about', label: 'За приложението' },
+  { key: 'privacy', label: 'Политика за поверителност' },
+  { key: 'version', label: 'Версия 1.0.0' },
+];
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -11,7 +18,10 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}>
-      <Text style={[festivalUi.typography.sectionTitle, styles.title]}>Профил</Text>
+      <View style={styles.brandBlock}>
+        <Text style={styles.brandTitle}>Festivo</Text>
+        <Text style={styles.brandSubtitle}>Откривай събития в България</Text>
+      </View>
       <View style={styles.card}>
         <View style={styles.row}>
           <Ionicons name="person-circle-outline" size={44} color={festivalUi.colors.secondary} />
@@ -24,6 +34,21 @@ export default function ProfileScreen() {
         </View>
         <OutlinedActionButton label="Изход" onPress={() => void logout()} />
       </View>
+
+      <View style={styles.settingsCard}>
+        {SETTINGS_ROWS.map((row, index) => (
+          <Pressable
+            key={row.key}
+            style={({ pressed }) => [
+              styles.settingsRow,
+              index < SETTINGS_ROWS.length - 1 && styles.settingsRowBorder,
+              pressed && styles.settingsRowPressed,
+            ]}>
+            <Text style={styles.settingsRowLabel}>{row.label}</Text>
+            <Ionicons name="chevron-forward" size={18} color={festivalUi.colors.muted} />
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -33,8 +58,20 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: festivalUi.screenPadding,
   },
-  title: {
-    marginBottom: 16,
+  brandBlock: {
+    marginBottom: 24,
+  },
+  brandTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: festivalUi.colors.text,
+    letterSpacing: -0.5,
+  },
+  brandSubtitle: {
+    marginTop: 6,
+    fontSize: 15,
+    fontWeight: '500',
+    color: festivalUi.colors.secondary,
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -62,6 +99,34 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 16,
     fontWeight: '600',
+    color: festivalUi.colors.text,
+  },
+  settingsCard: {
+    marginTop: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: festivalUi.colors.border,
+    overflow: 'hidden',
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 52,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  settingsRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  settingsRowPressed: {
+    opacity: 0.72,
+  },
+  settingsRowLabel: {
+    fontSize: 16,
+    fontWeight: '500',
     color: festivalUi.colors.text,
   },
 });

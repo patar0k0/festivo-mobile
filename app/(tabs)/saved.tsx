@@ -102,6 +102,7 @@ export default function SavedScreen() {
       }
       renderItem={({ item }) => (
         <FestivalCard
+          variant="compact"
           item={item}
           onPressCard={() => router.push(`/festival/${item.slug}`)}
           onPressSave={() => onRemove(item)}

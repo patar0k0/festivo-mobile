@@ -232,6 +232,7 @@ export default function FestivalDetailScreen() {
               source={{ uri: coverUri }}
               style={styles.heroImage}
               contentFit="cover"
+              contentPosition="top"
               transition={200}
               cachePolicy="memory-disk"
               priority="high"
@@ -276,7 +277,6 @@ export default function FestivalDetailScreen() {
             onPress={() => onToggleSave(data)}
             style={({ pressed }) => [
               styles.primaryCta,
-              data.saved && styles.primaryCtaSaved,
               pressed && !isSaving && styles.primaryCtaPressed,
               isSaving && styles.primaryCtaSaving,
             ]}>
@@ -424,11 +424,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   heroBookmarkDisabled: {
     opacity: 0.45,
@@ -454,12 +454,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#111827',
   },
-  primaryCtaSaved: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
-  },
   primaryCtaPressed: {
-    opacity: 0.9,
+    opacity: 0.88,
   },
   primaryCtaSaving: {
     opacity: 0.85,
