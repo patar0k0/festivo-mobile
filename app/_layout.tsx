@@ -48,11 +48,6 @@ function AuthNavigationSync() {
 function RootStack() {
   useNotificationResponseNavigation();
 
-  useEffect(() => {
-    if (!__DEV__) return;
-    console.log('[festivo] root stack render (no full-screen overlay in layout)');
-  }, []);
-
   return (
     <>
       <AuthNavigationSync />

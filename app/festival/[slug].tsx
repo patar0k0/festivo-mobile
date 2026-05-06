@@ -112,28 +112,28 @@ function HeroBookmarkButton({
   );
 }
 
+/**
+ * Fullscreen image lightbox. Only mount while open so no hidden Modal stays in the native layer.
+ * Android hardware back: Modal onRequestClose → same path as backdrop / X (closes lightbox only).
+ */
 function GalleryLightbox({
-  visible,
   uri,
   onClose,
   insetTop,
   fadeAnim,
 }: {
-  visible: boolean;
-  uri: string | null;
+  uri: string;
   onClose: () => void;
   insetTop: number;
   fadeAnim: Animated.Value;
 }) {
-  useEffect(() => {
-    if (!__DEV__) return;
-    console.log('[festivo] gallery modal layer', { visible, hasUri: Boolean(uri) });
-  }, [visible, uri]);
-
-  if (!uri) return null;
-
   return (
-    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={onClose}>
       <Animated.View style={[styles.lightboxRoot, { opacity: fadeAnim }]} pointerEvents="box-none">
         <Pressable
           style={styles.lightboxBackdrop}
@@ -173,8 +173,10 @@ export default function FestivalDetailScreen() {
   const [galleryVisible, setGalleryVisible] = useState(false);
   const [selectedGalleryUri, setSelectedGalleryUri] = useState<string | null>(null);
   const galleryFade = useRef(new Animated.Value(0)).current;
-  /** When true, a close animation must not tear down state (user reopened or screen still showing). */
+  /** When true, user intends the lightbox open; close completion must not clear if reopened. */
   const lightboxOpenIntentRef = useRef(false);
+  /** Bumps on each open/close/blur so stale animation callbacks cannot touch state. */
+  const lightboxAnimTokenRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const pendingClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -195,14 +197,12 @@ export default function FestivalDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       return () => {
+        lightboxAnimTokenRef.current += 1;
         galleryFade.stopAnimation();
         lightboxOpenIntentRef.current = false;
         setGalleryVisible(false);
         setSelectedGalleryUri(null);
         galleryFade.setValue(0);
-        if (__DEV__) {
-          console.log('[festivo] gallery lightbox reset on screen blur');
-        }
       };
     }, [galleryFade]),
   );
@@ -228,6 +228,8 @@ export default function FestivalDetailScreen() {
   const openGallery = useCallback(
     (uri: string) => {
       lightboxOpenIntentRef.current = true;
+      const token = ++lightboxAnimTokenRef.current;
+      galleryFade.stopAnimation();
       setSelectedGalleryUri(uri);
       setGalleryVisible(true);
       galleryFade.setValue(0);
@@ -235,18 +237,27 @@ export default function FestivalDetailScreen() {
         toValue: 1,
         duration: 200,
         useNativeDriver: true,
-      }).start();
+      }).start(() => {
+        if (token !== lightboxAnimTokenRef.current || !lightboxOpenIntentRef.current) {
+          return;
+        }
+      });
     },
     [galleryFade],
   );
 
   const closeGallery = useCallback(() => {
     lightboxOpenIntentRef.current = false;
+    const token = ++lightboxAnimTokenRef.current;
+    galleryFade.stopAnimation();
     Animated.timing(galleryFade, {
       toValue: 0,
       duration: 160,
       useNativeDriver: true,
     }).start(() => {
+      if (token !== lightboxAnimTokenRef.current) {
+        return;
+      }
       if (lightboxOpenIntentRef.current) {
         return;
       }
@@ -363,13 +374,14 @@ export default function FestivalDetailScreen() {
 
   return (
     <View style={styles.root}>
-      <GalleryLightbox
-        visible={galleryVisible}
-        uri={selectedGalleryUri}
-        onClose={closeGallery}
-        insetTop={insets.top}
-        fadeAnim={galleryFade}
-      />
+      {galleryVisible && selectedGalleryUri ? (
+        <GalleryLightbox
+          uri={selectedGalleryUri}
+          onClose={closeGallery}
+          insetTop={insets.top}
+          fadeAnim={galleryFade}
+        />
+      ) : null}
       <ScrollView
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -428,12 +440,7 @@ export default function FestivalDetailScreen() {
         {/* Primary CTA */}
         <View style={styles.ctaBlock}>
           <Pressable
-            onPress={() => {
-              if (__DEV__) {
-                console.log('[festivo] detail primary CTA press');
-              }
-              onToggleSave(data);
-            }}
+            onPress={() => onToggleSave(data)}
             style={({ pressed }) => [
               styles.primaryCta,
               {
@@ -638,6 +645,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     zIndex: 2,
+    elevation: Platform.OS === 'android' ? 8 : 0,
     width: 44,
     height: 44,
     borderRadius: 22,
