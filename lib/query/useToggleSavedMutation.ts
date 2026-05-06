@@ -122,13 +122,17 @@ export function useToggleSavedMutation() {
         queryClient.setQueryData(['festival', context.slug], context.festivalDetail);
       }
     },
-    onSettled: (_data, _error, input) => {
-      queryClient.invalidateQueries({ queryKey: ['festivals'] });
-      queryClient.invalidateQueries({ queryKey: ['search'] });
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            Array.isArray(key) &&
+            (key[0] === 'search' || key[0] === 'festivals' || key[0] === 'festival')
+          );
+        },
+      });
       queryClient.invalidateQueries({ queryKey: ['savedFestivals'] });
-      if (input.slug ?? input.festival?.slug) {
-        queryClient.invalidateQueries({ queryKey: ['festival', input.slug ?? input.festival?.slug] });
-      }
     },
   });
 }

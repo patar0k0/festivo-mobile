@@ -45,7 +45,9 @@ export default function ProfileScreen() {
               pressed && styles.settingsRowPressed,
             ]}>
             <Text style={styles.settingsRowLabel}>{row.label}</Text>
-            <Ionicons name="chevron-forward" size={18} color={festivalUi.colors.muted} />
+            <View style={styles.settingsChevronWrap}>
+              <Ionicons name="chevron-forward" size={18} color={festivalUi.colors.muted} />
+            </View>
           </Pressable>
         ))}
       </View>
@@ -59,7 +61,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: festivalUi.screenPadding,
   },
   brandBlock: {
-    marginBottom: 24,
+    marginBottom: 28,
   },
   brandTitle: {
     fontSize: 32,
@@ -71,20 +73,25 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 15,
     fontWeight: '500',
-    color: festivalUi.colors.secondary,
+    color: '#8B92A3',
   },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: festivalUi.colors.border,
-    padding: 16,
+    padding: 20,
     gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 16,
   },
   meta: {
     flex: 1,
@@ -102,7 +109,7 @@ const styles = StyleSheet.create({
     color: festivalUi.colors.text,
   },
   settingsCard: {
-    marginTop: 16,
+    marginTop: 22,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
@@ -113,8 +120,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 52,
-    paddingVertical: 14,
+    height: 56,
     paddingHorizontal: 16,
   },
   settingsRowBorder: {
@@ -128,5 +134,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: festivalUi.colors.text,
+  },
+  settingsChevronWrap: {
+    opacity: 0.55,
   },
 });

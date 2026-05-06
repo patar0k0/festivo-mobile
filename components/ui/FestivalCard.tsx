@@ -107,6 +107,11 @@ export function FestivalCard({
   if (variant === 'compact') {
     return (
       <View style={styles.compactSavedCard}>
+        {item.saved ? (
+          <View pointerEvents="none" style={styles.compactCardBookmark}>
+            <Ionicons name="bookmark" size={20} color={colors.text} />
+          </View>
+        ) : null}
         <Pressable
           onPress={onPressCard}
           style={({ pressed }) => [styles.compactSavedRow, pressed && styles.cardPressed]}>
@@ -118,23 +123,18 @@ export function FestivalCard({
                 <Text style={styles.compactSavedThumbEmoji}>🎉</Text>
               </View>
             )}
-            {item.saved ? (
-              <View pointerEvents="none" style={styles.compactThumbBookmark}>
-                <Ionicons name="bookmark" size={18} color={colors.text} />
-              </View>
-            ) : null}
           </View>
-          <View style={styles.compactSavedBody}>
+          <View style={[styles.compactSavedBody, item.saved && styles.compactSavedBodyWithBookmark]}>
             <Text style={styles.compactSavedTitle} numberOfLines={2}>
               {item.title}
             </Text>
             <Text style={styles.compactSavedMetaFirst} numberOfLines={1}>
               {item.city || 'България'}
             </Text>
-            <Text style={styles.compactSavedMetaLine} numberOfLines={1}>
+            <Text style={styles.compactSavedMetaStatus} numberOfLines={1}>
               {dateLabel}
             </Text>
-            <Text style={styles.compactSavedMetaLine} numberOfLines={1}>
+            <Text style={styles.compactSavedMetaStatusLast} numberOfLines={1}>
               {startsInText}
             </Text>
           </View>
@@ -382,29 +382,44 @@ export function OutlinedActionButton({
 
 const styles = StyleSheet.create({
   compactSavedCard: {
+    position: 'relative',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#EEEEEE',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
     overflow: 'hidden',
+  },
+  compactCardBookmark: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    zIndex: 2,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(17,24,39,0.08)',
   },
   compactSavedRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    marginBottom: 8,
+    marginBottom: 0,
   },
   compactSavedThumbWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 14,
+    width: 72,
+    height: 72,
+    borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: '#F3F4F6',
@@ -422,17 +437,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compactThumbBookmark: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-  },
   compactSavedThumbEmoji: {
-    fontSize: 36,
+    fontSize: 30,
   },
   compactSavedBody: {
     flex: 1,
     minWidth: 0,
+  },
+  compactSavedBodyWithBookmark: {
+    paddingRight: 40,
   },
   compactSavedTitle: {
     fontSize: 17,
@@ -440,17 +453,22 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   compactSavedMetaFirst: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#666666',
+  },
+  compactSavedMetaStatus: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#777777',
+  },
+  compactSavedMetaStatusLast: {
     marginTop: 4,
     fontSize: 13,
-    color: '#666666',
-  },
-  compactSavedMetaLine: {
-    marginTop: 2,
-    fontSize: 13,
-    color: '#666666',
+    color: '#777777',
   },
   savedCompactStack: {
-    marginTop: 0,
+    marginTop: 12,
     gap: 6,
   },
   savedBadgeRowCompact: {
@@ -658,20 +676,25 @@ const styles = StyleSheet.create({
   saveButton: {
     alignSelf: 'stretch',
     backgroundColor: colors.buttonBg,
-    paddingVertical: 11,
+    minHeight: 42,
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 11,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.buttonBg,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   saveButtonCompact: {
-    minHeight: 38,
-    paddingVertical: 8,
+    minHeight: 40,
+    height: 40,
+    paddingVertical: 0,
     justifyContent: 'center',
+    borderRadius: 14,
   },
   saveButtonFloating: {
     alignSelf: 'flex-end',
+    minHeight: 36,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 999,
@@ -680,6 +703,7 @@ const styles = StyleSheet.create({
     minWidth: 108,
   },
   saveButtonFloatingLarge: {
+    minHeight: 40,
     paddingVertical: 10,
     paddingHorizontal: 16,
     minWidth: 120,

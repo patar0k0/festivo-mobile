@@ -77,15 +77,21 @@ export default function SavedScreen() {
 
   if (validItems.length === 0) {
     return (
-      <View style={[styles.emptyScreen, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
-        <Ionicons name="bookmark-outline" size={64} color={festivalUi.colors.muted} style={styles.emptyIcon} />
-        <Text style={styles.emptyTitle}>Нямаш запазени събития</Text>
-        <Text style={styles.emptySubtitle}>Натисни 🔖 на събитие, за да го запазиш</Text>
-        <Pressable
-          onPress={() => router.push('/')}
-          style={({ pressed }) => [styles.primaryCta, pressed && styles.primaryCtaPressed]}>
-          <Text style={styles.primaryCtaText}>Разгледай събития</Text>
-        </Pressable>
+      <View
+        style={[
+          styles.emptyScreen,
+          { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 32 },
+        ]}>
+        <View style={styles.emptyInner}>
+          <Ionicons name="bookmark-outline" size={64} color={festivalUi.colors.muted} style={styles.emptyIcon} />
+          <Text style={styles.emptyTitle}>Нямаш запазени събития</Text>
+          <Text style={styles.emptySubtitle}>Натисни 🔖 на събитие, за да го запазиш</Text>
+          <Pressable
+            onPress={() => router.push('/')}
+            style={({ pressed }) => [styles.primaryCta, pressed && styles.primaryCtaPressed]}>
+            <Text style={styles.primaryCtaText}>Разгледай събития</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -94,8 +100,15 @@ export default function SavedScreen() {
     <FlatList
       data={validItems}
       keyExtractor={(item) => item.festivalId}
-      contentContainerStyle={[styles.listContent, { paddingTop: insets.top + 12, paddingBottom: 32 }]}
-      ItemSeparatorComponent={() => <View style={{ height: festivalUi.cardGap }} />}
+      contentContainerStyle={[
+        styles.listContent,
+        {
+          flexGrow: 1,
+          paddingTop: insets.top + 8,
+          paddingBottom: insets.bottom + 56,
+        },
+      ]}
+      ItemSeparatorComponent={() => <View style={styles.cardSeparator} />}
       extraData={pendingIds}
       ListHeaderComponent={
         <Text style={[festivalUi.typography.sectionTitle, styles.listHeader]}>Запазени</Text>
@@ -121,8 +134,18 @@ const styles = StyleSheet.create({
   emptyScreen: {
     flex: 1,
     paddingHorizontal: festivalUi.screenPadding,
+    justifyContent: 'center',
+  },
+  emptyInner: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 40,
+    minHeight: 320,
+  },
+  cardSeparator: {
+    height: 20,
   },
   emptyIcon: {
     marginBottom: 20,
@@ -157,11 +180,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   listContent: {
-    padding: festivalUi.screenPadding,
-    paddingBottom: 32,
+    paddingHorizontal: festivalUi.screenPadding,
+    paddingTop: festivalUi.screenPadding,
   },
   listHeader: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   loadingTitle: {
     marginBottom: 16,

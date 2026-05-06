@@ -32,7 +32,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .getSession()
       .then(({ data }) => {
         if (!active) return;
-        console.log('[TOKEN DEBUG]', data.session?.access_token);
+        if (__DEV__) {
+          console.log('[TOKEN DEBUG]', data.session?.access_token ? 'present' : 'missing');
+        }
         setUser(data.session?.user ?? null);
       })
       .catch(() => {

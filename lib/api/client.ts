@@ -10,19 +10,18 @@ export async function apiFetch(path: string, token?: string, init?: RequestInit)
 
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
-  } else {
-    console.log('[API] NO TOKEN');
+  } else if (__DEV__) {
+    console.log('[API] no bearer token for', path);
   }
-
-  console.log('[API] request:', path);
-  console.log('[API] token present:', !!accessToken);
 
   const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL}${path}`, {
     ...init,
     headers,
   });
 
-  console.log('[API] status:', res.status);
+  if (__DEV__) {
+    console.log('[API]', path, res.status);
+  }
 
   return res;
 }

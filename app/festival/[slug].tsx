@@ -13,7 +13,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  UIManager,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +23,7 @@ import { getFestival } from '@/lib/api/festivals';
 import { formatDateRangeRelative, getRelativeDateLabel } from '@/lib/festival/relativeDate';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 
-const HERO_H = 286;
+const HERO_H = Platform.OS === 'android' ? 250 : 286;
 const GALLERY_H = 120;
 const CTA_H = 50;
 const DESC_COLLAPSED_LINES = 7;
@@ -127,9 +126,6 @@ export default function FestivalDetailScreen() {
   });
 
   const toggleDescriptionExpanded = () => {
-    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-      UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setDescriptionExpanded((v) => !v);
   };
@@ -241,23 +237,29 @@ export default function FestivalDetailScreen() {
             <View style={[styles.heroFallback, { backgroundColor: heroFallbackColor(data.slug) }]} />
           )}
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.08)', 'rgba(0,0,0,0.82)']}
-            locations={[0, 0.35, 1]}
+            colors={['transparent', 'rgba(0,0,0,0.38)', 'rgba(0,0,0,0.72)']}
+            locations={[0, 0.42, 1]}
             style={StyleSheet.absoluteFill}
           />
           <View style={styles.heroTextBlock}>
-            <Text style={styles.heroTitle} numberOfLines={3}>
+            <Text style={styles.heroTitle} numberOfLines={2}>
               {data.title}
             </Text>
-            {data.city ? (
-              <Text style={styles.heroMeta} numberOfLines={1}>
-                {data.city}
-              </Text>
-            ) : null}
-            {dateLineHero ? (
-              <Text style={styles.heroMeta} numberOfLines={1}>
-                {dateLineHero}
-              </Text>
+            {data.city || dateLineHero ? (
+              <View style={styles.heroMetaBackdrop}>
+                {data.city ? (
+                  <Text style={styles.heroMetaInBackdrop} numberOfLines={1}>
+                    {data.city}
+                  </Text>
+                ) : null}
+                {dateLineHero ? (
+                  <Text
+                    style={[styles.heroMetaInBackdrop, data.city ? styles.heroMetaInBackdropSecond : null]}
+                    numberOfLines={1}>
+                    {dateLineHero}
+                  </Text>
+                ) : null}
+              </View>
             ) : null}
           </View>
           <HeroBookmarkButton
@@ -403,21 +405,35 @@ const styles = StyleSheet.create({
   heroTextBlock: {
     position: 'absolute',
     left: festivalUi.screenPadding,
-    right: festivalUi.screenPadding + 52,
+    right: festivalUi.screenPadding + 58,
     bottom: 18,
   },
   heroTitle: {
     color: '#FFFFFF',
     fontSize: 26,
     fontWeight: '800',
-    lineHeight: 30,
+    lineHeight: 28,
     letterSpacing: -0.3,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
-  heroMeta: {
-    marginTop: 6,
-    color: 'rgba(255,255,255,0.92)',
+  heroMetaBackdrop: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    maxWidth: '100%',
+  },
+  heroMetaInBackdrop: {
+    color: 'rgba(255,255,255,0.95)',
     fontSize: 15,
     fontWeight: '500',
+  },
+  heroMetaInBackdropSecond: {
+    marginTop: 4,
   },
   heroBookmark: {
     position: 'absolute',
@@ -446,7 +462,7 @@ const styles = StyleSheet.create({
   },
   primaryCta: {
     height: CTA_H,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: '#111827',
     alignItems: 'center',
     justifyContent: 'center',
@@ -522,7 +538,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     backgroundColor: '#FAFAFA',
@@ -547,7 +563,7 @@ const styles = StyleSheet.create({
   galleryThumb: {
     width: 168,
     height: GALLERY_H,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#F3F4F6',
   },
   galleryThumbSep: {
@@ -580,7 +596,7 @@ const styles = StyleSheet.create({
   ctaSkeleton: {
     marginTop: 8,
     height: CTA_H,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: '#F3F4F6',
   },
 });

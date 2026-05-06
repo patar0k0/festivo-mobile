@@ -6,14 +6,12 @@ import {
   Animated,
   Keyboard,
   LayoutAnimation,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   SectionList,
   StyleSheet,
   Text,
-  UIManager,
   View,
   type SectionListRenderItemInfo,
 } from 'react-native';
@@ -35,10 +33,6 @@ import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 import { queryClient } from '@/lib/queryClient';
 
 const COLORS = festivalUi.colors;
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 function ResultSkeletonRow() {
   const opacity = useRef(new Animated.Value(0.45)).current;
@@ -115,7 +109,8 @@ export default function SearchScreen() {
     queryKey: ['search', debounced],
     queryFn: () => searchFestivals(debounced),
     enabled: searchEnabled,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
   });
 
   useEffect(() => {
@@ -143,14 +138,18 @@ export default function SearchScreen() {
 
   const openFestival = useCallback(
     (item: FestivalListItem) => {
-      void queryClient.prefetchQuery({
-        queryKey: ['festival', item.slug],
-        queryFn: () => getFestivalBySlug(item.slug),
-        staleTime: 1000 * 60 * 5,
-      });
+      const existing = queryClient.getQueryData(['festival', item.slug]);
+      if (!existing) {
+        void queryClient.prefetchQuery({
+          queryKey: ['festival', item.slug],
+          queryFn: () => getFestivalBySlug(item.slug),
+          staleTime: 1000 * 60 * 5,
+          gcTime: 1000 * 60 * 30,
+        });
+      }
       router.push(`/festival/${item.slug}`);
     },
-    [router],
+    [router, queryClient],
   );
 
   const onSave = useCallback(

@@ -397,18 +397,24 @@ export default function HomeScreen() {
     queryKey: ['festivals', 'trending'],
     queryFn: () => getFestivals({ sort: 'trending', limit: 10 }),
     placeholderData: keepPreviousData,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
   });
 
   const weekQuery = useQuery<FestivalListItem[], Error, FestivalListItem[]>({
     queryKey: ['festivals', 'week'],
     queryFn: () => getFestivals({ when: 'this_week', limit: 10 }),
     placeholderData: keepPreviousData,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
   });
 
   const popularQuery = useQuery<FestivalListItem[], Error, FestivalListItem[]>({
     queryKey: ['festivals', 'popular'],
     queryFn: () => getFestivals({ sort: 'popular', limit: 10 }),
     placeholderData: keepPreviousData,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
   });
 
   const trending = trendingQuery.data ?? [];
@@ -445,14 +451,18 @@ export default function HomeScreen() {
 
   const openFestival = useCallback(
     (item: FestivalListItem) => {
-      void queryClient.prefetchQuery({
-        queryKey: ['festival', item.slug],
-        queryFn: () => getFestivalBySlug(item.slug),
-        staleTime: 1000 * 60 * 5,
-      });
+      const existing = queryClient.getQueryData(['festival', item.slug]);
+      if (!existing) {
+        void queryClient.prefetchQuery({
+          queryKey: ['festival', item.slug],
+          queryFn: () => getFestivalBySlug(item.slug),
+          staleTime: 1000 * 60 * 5,
+          gcTime: 1000 * 60 * 30,
+        });
+      }
       router.push(`/festival/${item.slug}`);
     },
-    [router],
+    [router, queryClient],
   );
 
   const onSave = useCallback(
@@ -535,7 +545,10 @@ export default function HomeScreen() {
           colors={[COLORS.text]}
         />
       }
-      contentContainerStyle={[styles.listContent, { paddingTop: insets.top + 8, paddingBottom: 32 }]}
+      contentContainerStyle={[
+        styles.listContent,
+        { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 48 },
+      ]}
       renderSectionHeader={({ section }) => (
         <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>{section.title}</Text>
       )}
@@ -658,7 +671,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   sectionTitle: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   sectionSep: {
     height: 28,
@@ -678,21 +691,23 @@ const styles = StyleSheet.create({
   },
   trendingSkeletonRow: {
     flexDirection: 'row',
-    gap: 14,
+    gap: 12,
   },
   trendingCardInner: {
     height: 198,
-    borderRadius: 16,
+    borderRadius: 22,
     overflow: 'hidden',
     backgroundColor: '#E5E7EB',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   saveBtnDisabled: {
     opacity: 0.45,
   },
   trendingSaveBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: 'rgba(255,255,255,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -701,8 +716,8 @@ const styles = StyleSheet.create({
   },
   trendingBookmarkPosition: {
     position: 'absolute',
-    top: 10,
-    right: 10,
+    top: 9,
+    right: 9,
   },
   trendingSaveBtnPressed: {
     opacity: 0.85,
@@ -720,12 +735,13 @@ const styles = StyleSheet.create({
     right: 12,
   },
   trendingTitle: {
+    maxWidth: '78%',
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '800',
     textShadowColor: 'rgba(0,0,0,0.25)',
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
+    textShadowRadius: 4,
   },
   trendingMeta: {
     marginTop: 6,
@@ -734,7 +750,7 @@ const styles = StyleSheet.create({
   },
   trendingSkeletonCard: {
     height: 198,
-    borderRadius: 16,
+    borderRadius: 22,
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -754,7 +770,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    marginBottom: 10,
+    marginBottom: 12,
     gap: 12,
   },
   compactThumb: {
