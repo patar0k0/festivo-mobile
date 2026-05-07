@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { type Href, useRouter } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
@@ -12,8 +13,15 @@ const SETTINGS_ROWS: { key: string; label: string }[] = [
   { key: 'version', label: 'Версия 1.0.0' },
 ];
 
+const SETTINGS_ROUTE_BY_KEY: Record<string, string> = {
+  notifications: '/profile-notifications',
+  about: '/profile-about',
+  privacy: '/profile-privacy',
+};
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user, logout, loading } = useAuth();
 
   return (
@@ -37,11 +45,22 @@ export default function ProfileScreen() {
 
       <View style={styles.settingsCard}>
         {SETTINGS_ROWS.map((row, index) => (
-          <View
+          <Pressable
             key={row.key}
-            style={[styles.settingsRow, index < SETTINGS_ROWS.length - 1 && styles.settingsRowBorder]}>
+            accessibilityRole="button"
+            onPress={() => {
+              const navigateTo = SETTINGS_ROUTE_BY_KEY[row.key] ?? null;
+              if (navigateTo) {
+                router.push(navigateTo as Href);
+              }
+            }}
+            style={({ pressed }) => [
+              styles.settingsRow,
+              index < SETTINGS_ROWS.length - 1 && styles.settingsRowBorder,
+              pressed && styles.settingsRowPressed,
+            ]}>
             <Text style={styles.settingsRowLabel}>{row.label}</Text>
-          </View>
+          </Pressable>
         ))}
       </View>
     </View>
@@ -124,5 +143,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: festivalUi.colors.text,
+  },
+  settingsRowPressed: {
+    opacity: 0.75,
+    backgroundColor: '#F6F7F9',
   },
 });

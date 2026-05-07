@@ -546,6 +546,9 @@ export default function HomeScreen() {
   const weekHeaderBlockInListHeader =
     (weekQuery.isLoading && week.length === 0) || weekQuery.isError;
 
+  /** RN lists can skip cell updates if only nested fields change; `dataUpdatedAt` bumps on every cache patch. */
+  const listExtrasKey = `${trendingQuery.dataUpdatedAt}|${weekQuery.dataUpdatedAt}|${popularQuery.dataUpdatedAt}|${[...pendingIds].sort().join(',')}`;
+
   return (
     <SectionList<HomeSection['data'][number], HomeSection>
       sections={sections}
@@ -553,7 +556,7 @@ export default function HomeScreen() {
       stickySectionHeadersEnabled={false}
       nestedScrollEnabled
       keyboardShouldPersistTaps="handled"
-      extraData={pendingIds}
+      extraData={listExtrasKey}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -600,7 +603,7 @@ export default function HomeScreen() {
                     maxToRenderPerBatch={5}
                     contentContainerStyle={styles.trendingFlatListContent}
                     ItemSeparatorComponent={TrendingItemSeparator}
-                    extraData={pendingIds}
+                    extraData={listExtrasKey}
                     getItemLayout={(_data, index) => ({
                       length: CARD_WIDTH,
                       offset: (CARD_WIDTH + TRENDING_CARD_SEPARATOR_WIDTH) * index,

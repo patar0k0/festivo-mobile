@@ -250,7 +250,26 @@ export async function getFestivals(params?: GetFestivalsParams): Promise<Festiva
         ? record.data
         : [];
   if (!Array.isArray(rawList)) return [];
-  return rawList.map(parseListItem).filter((x): x is FestivalListItem => x != null);
+  const list = rawList.map(parseListItem).filter((x): x is FestivalListItem => x != null);
+  // #region agent log
+  fetch('http://127.0.0.1:7454/ingest/f7b1cd1d-10a4-4fd2-b861-c1fca419479c', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3a6a16' },
+    body: JSON.stringify({
+      sessionId: '3a6a16',
+      runId: 'pre',
+      hypothesisId: 'H1',
+      location: 'festivals.ts:getFestivals',
+      message: 'list fetch parsed',
+      data: {
+        count: list.length,
+        savedTrueCount: list.filter((x) => x.saved).length,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+  return list;
 }
 
 export async function getFestival(slug: string): Promise<FestivalDetail> {
@@ -266,7 +285,23 @@ export async function getFestival(slug: string): Promise<FestivalDetail> {
   }
   const body = await readJson(res);
   const payload = asRecord(body)?.data ?? body;
-  return parseDetail(payload, slug);
+  const detail = parseDetail(payload, slug);
+  // #region agent log
+  fetch('http://127.0.0.1:7454/ingest/f7b1cd1d-10a4-4fd2-b861-c1fca419479c', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3a6a16' },
+    body: JSON.stringify({
+      sessionId: '3a6a16',
+      runId: 'pre',
+      hypothesisId: 'H1',
+      location: 'festivals.ts:getFestival',
+      message: 'detail fetch parsed',
+      data: { slug, festivalId: detail.festivalId, saved: detail.saved },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+  return detail;
 }
 
 /** Alias for detail prefetch / readability; same contract as {@link getFestival}. */

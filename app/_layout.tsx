@@ -57,6 +57,30 @@ function RootStack() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="festival/[slug]" options={{ headerShown: false }} />
         <Stack.Screen name="search" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="profile-notifications"
+          options={{
+            title: 'Известия',
+            headerShown: true,
+            headerBackTitle: 'Назад',
+          }}
+        />
+        <Stack.Screen
+          name="profile-about"
+          options={{
+            title: 'За приложението',
+            headerShown: true,
+            headerBackTitle: 'Назад',
+          }}
+        />
+        <Stack.Screen
+          name="profile-privacy"
+          options={{
+            title: 'Политика за поверителност',
+            headerShown: true,
+            headerBackTitle: 'Назад',
+          }}
+        />
       </Stack>
     </>
   );

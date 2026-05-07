@@ -216,6 +216,8 @@ export default function SearchScreen() {
     (searchQuery.data?.length ?? 0) === 0;
   const showGrouped = showResultsShell && !isDebouncing && searchQuery.isSuccess && (searchQuery.data?.length ?? 0) > 0;
 
+  const searchListExtrasKey = `${searchQuery.dataUpdatedAt}|${[...pendingIds].sort().join(',')}`;
+
   const topPad = insets.top + 8;
 
   return (
@@ -300,7 +302,7 @@ export default function SearchScreen() {
               initialNumToRender={8}
               windowSize={7}
               maxToRenderPerBatch={12}
-              extraData={pendingIds}
+              extraData={searchListExtrasKey}
               contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
               SectionSeparatorComponent={() => <View style={styles.sectionSep} />}
               refreshControl={

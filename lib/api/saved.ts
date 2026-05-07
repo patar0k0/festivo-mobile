@@ -42,6 +42,27 @@ function readErrorMessage(body: unknown, status: number): string {
   return `Request failed (${status})`;
 }
 
+/** Plan POST must expose a boolean saved flag; `Boolean(undefined)` was falsely turning success into `saved: false`. */
+function parseToggleSavedResponse(body: unknown): boolean {
+  const rec = asRecord(body);
+  if (!rec) {
+    throw new Error('Save response was empty');
+  }
+  const nested = asRecord(rec.data);
+  const raw =
+    rec.saved ??
+    rec.is_saved ??
+    rec.isSaved ??
+    nested?.saved ??
+    nested?.is_saved ??
+    nested?.isSaved;
+
+  if (typeof raw === 'boolean') return raw;
+  if (raw === 1 || raw === '1' || raw === 'true') return true;
+  if (raw === 0 || raw === '0' || raw === 'false') return false;
+  throw new Error(`Save response missing or invalid saved flag: ${JSON.stringify(body).slice(0, 240)}`);
+}
+
 export async function toggleSaved(festivalId: string): Promise<{ saved: boolean }> {
   const res = await apiFetch('/api/plan/festivals', undefined, {
     method: 'POST',
@@ -51,10 +72,7 @@ export async function toggleSaved(festivalId: string): Promise<{ saved: boolean 
   if (!res.ok) {
     throw new Error(readErrorMessage(body, res.status));
   }
-  const payload = asRecord(body)?.data ?? body;
-  const saved = Boolean(
-    asRecord(payload)?.saved ?? asRecord(payload)?.is_saved ?? asRecord(payload)?.isSaved
-  );
+  const saved = parseToggleSavedResponse(body);
   return { saved };
 }
 
