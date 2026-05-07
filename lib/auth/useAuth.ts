@@ -9,8 +9,9 @@ import {
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
+import { Platform } from 'react-native';
 
-import { supabase } from '@/lib/supabase/client';
+import { getSupabaseClient, isNativeSupabaseRuntime } from '@/lib/supabase/client';
 
 export type AuthContextValue = {
   user: User | null;
@@ -26,7 +27,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isNativeSupabaseRuntime()) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     let active = true;
+    const supabase = getSupabaseClient();
 
     supabase.auth
       .getSession()
@@ -61,11 +69,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+      return { error: new Error('Login is only available in mobile runtime.') };
+    }
+    const supabase = getSupabaseClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error ? new Error(error.message) : null };
   }, []);
 
   const logout = useCallback(async () => {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
+    const supabase = getSupabaseClient();
     await supabase.auth.signOut();
   }, []);
 
@@ -86,6 +100,10 @@ export function useAuth(): AuthContextValue {
 }
 
 export async function getAccessToken(): Promise<string | null> {
+  if ((Platform.OS !== 'ios' && Platform.OS !== 'android') || typeof window === 'undefined') {
+    return null;
+  }
+  const supabase = getSupabaseClient();
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
 }

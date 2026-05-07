@@ -7,7 +7,6 @@ export type FestivalSavedRef = {
   slug?: string;
 };
 
-<<<<<<< HEAD
 function normalizeRefValue(value: unknown): string {
   if (value == null) return '';
   return String(value).trim();
@@ -31,30 +30,16 @@ export function festivalRefMatches(
 ): boolean {
   const itemId = readIdCandidate(item);
   const refId = normalizeRefValue(ref.festivalId);
-=======
-export function festivalRefMatches(
-  item: Pick<FestivalListItem, 'festivalId' | 'slug'>,
-  ref: FestivalSavedRef,
-): boolean {
-  const itemId = String(item.festivalId ?? '').trim();
-  const refId = String(ref.festivalId ?? '').trim();
->>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
   if (itemId && refId) {
     if (itemId === refId) return true;
     if (itemId.toLowerCase() === refId.toLowerCase()) return true;
   }
-<<<<<<< HEAD
   const itemSlug = readSlugCandidate(item);
   const refSlug = normalizeRefValue(ref.slug);
   if (refSlug && itemSlug) {
     if (itemSlug === refSlug) return true;
     if (itemSlug.toLowerCase() === refSlug.toLowerCase()) return true;
   }
-=======
-  const itemSlug = String(item.slug ?? '').trim();
-  const refSlug = ref.slug != null ? String(ref.slug).trim() : '';
-  if (refSlug && itemSlug === refSlug) return true;
->>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
   return false;
 }
 
@@ -91,7 +76,6 @@ function isInfiniteFestivalListPages(data: unknown): data is InfiniteData<Festiv
   return Array.isArray(pages) && pages.every((p) => Array.isArray(p));
 }
 
-<<<<<<< HEAD
 type InfiniteFestivalObjectPages = {
   pages: Array<Record<string, unknown>>;
   pageParams?: unknown[];
@@ -115,16 +99,12 @@ function isInfiniteFestivalObjectPages(data: unknown): data is InfiniteFestivalO
     })
   );
 }
-
-=======
->>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
 /** Flat items from a cached list or infinite list query for saved-state resolution. */
 export function flattenFestivalListQueryData(data: unknown): FestivalListItem[] {
   if (Array.isArray(data)) return data as FestivalListItem[];
   if (isInfiniteFestivalListPages(data)) {
     return data.pages.flat();
   }
-<<<<<<< HEAD
   if (isInfiniteFestivalObjectPages(data)) {
     return data.pages.flatMap((page) => {
       const key = pageListKey(page);
@@ -132,8 +112,6 @@ export function flattenFestivalListQueryData(data: unknown): FestivalListItem[] 
       return page[key] as FestivalListItem[];
     });
   }
-=======
->>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
   return [];
 }
 
@@ -156,7 +134,6 @@ export function updateFestivalSavedStateInCache(
       pages: inf.pages.map((page) => mapListSavedState(page, ref, nextSaved)),
     };
   }
-<<<<<<< HEAD
   if (isInfiniteFestivalObjectPages(oldData)) {
     return {
       ...oldData,
@@ -168,8 +145,6 @@ export function updateFestivalSavedStateInCache(
       }),
     };
   }
-=======
->>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
   return oldData;
 }
 
