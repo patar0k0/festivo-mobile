@@ -15,3 +15,26 @@ export function getPrivacyPolicyUrl(): string | null {
   const origin = getWebSiteOrigin();
   return origin ? `${origin}/privacy` : null;
 }
+
+/** Public organizer profile on festivo-web (`/organizers/[slug]`). */
+export function getOrganizerPublicUrl(slug: string): string | null {
+  const trimmed = slug.trim();
+  if (!trimmed) return null;
+  const origin = getWebSiteOrigin();
+  return origin ? `${origin}/organizers/${encodeURIComponent(trimmed)}` : null;
+}
+
+/** Subscribe / download ICS for a festival (`/festival/[slug]/ics`). */
+export function getFestivalIcsUrl(slug: string): string | null {
+  const trimmed = slug.trim();
+  if (!trimmed) return null;
+  const origin = getWebSiteOrigin();
+  return origin ? `${origin}/festival/${encodeURIComponent(trimmed)}/ics` : null;
+}
+
+export function getFestivalPublicUrl(slug: string): string | null {
+  const trimmed = slug.trim();
+  if (!trimmed) return null;
+  const origin = getWebSiteOrigin();
+  return origin ? `${origin}/festivals/${encodeURIComponent(trimmed)}` : null;
+}

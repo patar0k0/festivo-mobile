@@ -1,36 +1,55 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
-import * as Linking from 'expo-linking';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import type { ComponentProps } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { OrganizerSocialIconRow, type OrganizerSocialLink } from '@/components/organizer/OrganizerSocialIconRow';
+import { VerifiedBadge } from '@/components/organizer/VerifiedBadge';
+import { AnimatedCount } from '@/components/ui/AnimatedCount';
+import { PressableScale } from '@/components/ui/PressableScale';
+import { Skeleton, skeletonRadii, skeletonRhythm } from '@/components/ui/Skeleton';
 import { FestivalCard, festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
 import type { FestivalListItem } from '@/lib/api/festivals';
 import { getOrganizerBySlug } from '@/lib/api/organizers';
+import { useAuth } from '@/lib/auth/useAuth';
+import { useToggleOrganizerFollowMutation } from '@/lib/query/useToggleOrganizerFollowMutation';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
+import { getOrganizerPublicUrl } from '@/lib/site';
 
 type LinkKey = 'website' | 'facebook' | 'instagram' | 'tiktok';
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-type OrganizerLinkRow = {
-  key: LinkKey;
-  label: string;
-  value: string;
-  url: string;
-  icon: IoniconName;
+const LINK_ICONS: Record<LinkKey, IoniconName> = {
+  website: 'globe-outline',
+  facebook: 'logo-facebook',
+  instagram: 'logo-instagram',
+  tiktok: 'musical-notes-outline',
 };
 
-const LINK_ROWS: Array<{ key: LinkKey; label: string; icon: IoniconName }> = [
-  { key: 'website', label: 'Уебсайт', icon: 'globe-outline' },
-  { key: 'facebook', label: 'Facebook', icon: 'logo-facebook' },
-  { key: 'instagram', label: 'Instagram', icon: 'logo-instagram' },
-  { key: 'tiktok', label: 'TikTok', icon: 'musical-notes-outline' },
-];
+const LINK_LABELS: Record<LinkKey, string> = {
+  website: 'Уебсайт',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+};
+
+const LINK_ORDER: LinkKey[] = ['website', 'facebook', 'instagram', 'tiktok'];
 
 function normalizeExternalUrl(value: string): string {
   const trimmed = value.trim();
@@ -48,12 +67,120 @@ function getInitials(name: string): string {
   return initials || 'F';
 }
 
+function formatFollowerCount(n: number): string {
+  return n.toLocaleString('bg-BG');
+}
+
+function followerCountLabel(n: number): string {
+  const formatted = formatFollowerCount(n);
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${formatted} последовател`;
+  }
+  return `${formatted} последователи`;
+}
+
+type HeaderHeroProps = {
+  name: string;
+  city?: string;
+  verified?: boolean;
+  coverUrl?: string | null;
+  logoUrl?: string | null;
+  initials: string;
+};
+
+const HeaderHero = memo(function HeaderHero({
+  name,
+  city,
+  verified,
+  coverUrl,
+  logoUrl,
+  initials,
+}: HeaderHeroProps) {
+  const hasCover = Boolean(coverUrl);
+  const hasLogo = Boolean(logoUrl);
+
+  return (
+    <View style={styles.heroCard}>
+      {hasCover && coverUrl ? (
+        <>
+          <ExpoImage
+            source={{ uri: coverUrl }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={180}
+            cachePolicy="memory-disk"
+            recyclingKey={coverUrl}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(17,24,39,0.08)', 'rgba(17,24,39,0.32)', 'rgba(17,24,39,0.74)']}
+            locations={[0, 0.48, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.heroTextOverlay}>
+            <View style={styles.heroTitleRow}>
+              <Text style={styles.heroTitleImage} numberOfLines={2}>
+                {name}
+              </Text>
+              {verified ? <VerifiedBadge compact /> : null}
+            </View>
+            {city ? (
+              <View style={styles.heroCityPill}>
+                <Ionicons name="location-outline" size={14} color="#FFFFFF" />
+                <Text style={styles.heroCityText} numberOfLines={1}>
+                  {city}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </>
+      ) : (
+        <LinearGradient colors={['#FDF2F8', '#EEF2FF', '#ECFDF5']} style={styles.coverFallback}>
+          <View style={styles.avatarWrap}>
+            {hasLogo && logoUrl ? (
+              <ExpoImage
+                source={{ uri: logoUrl }}
+                style={styles.avatarImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={logoUrl}
+              />
+            ) : (
+              <Text style={styles.avatarInitials}>{initials}</Text>
+            )}
+          </View>
+          <View style={styles.fallbackTitleBlock}>
+            <View style={styles.fallbackTitleRow}>
+              <Text style={styles.heroTitleFallback} numberOfLines={2}>
+                {name}
+              </Text>
+              {verified ? <VerifiedBadge compact /> : null}
+            </View>
+            {city ? (
+              <View style={styles.fallbackCityRow}>
+                <Ionicons name="location-outline" size={15} color={festivalUi.colors.secondary} />
+                <Text style={styles.fallbackCityText} numberOfLines={1}>
+                  {city}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </LinearGradient>
+      )}
+    </View>
+  );
+});
+
 export default function OrganizerProfileScreen() {
   const { slug: slugParam } = useLocalSearchParams<{ slug: string }>();
   const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const toggleSavedMutation = useToggleSavedMutation();
+  const followMutation = useToggleOrganizerFollowMutation(slug);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -63,12 +190,17 @@ export default function OrganizerProfileScreen() {
     enabled: Boolean(slug),
   });
 
-  const links = useMemo(() => {
+  const socialLinks = useMemo(() => {
     if (!data?.links) return [];
-    return LINK_ROWS.reduce<OrganizerLinkRow[]>((acc, row) => {
-      const value = data.links?.[row.key];
+    return LINK_ORDER.reduce<OrganizerSocialLink[]>((acc, key) => {
+      const value = data.links?.[key];
       if (typeof value !== 'string' || !value.trim()) return acc;
-      acc.push({ ...row, value: value.trim(), url: normalizeExternalUrl(value) });
+      acc.push({
+        key,
+        url: normalizeExternalUrl(value),
+        icon: LINK_ICONS[key],
+        accessibilityLabel: LINK_LABELS[key],
+      });
       return acc;
     }, []);
   }, [data?.links]);
@@ -78,22 +210,202 @@ export default function OrganizerProfileScreen() {
     void refetch().finally(() => setIsRefreshing(false));
   }, [refetch]);
 
-  const onToggleSave = (item: FestivalListItem) => {
-    const id = item.festivalId;
-    setPendingIds((prev) => new Set(prev).add(id));
-    toggleSavedMutation.mutate(
-      { festivalId: item.festivalId, slug: item.slug, festival: item },
+  const handleShare = useCallback(() => {
+    if (!data) return;
+    const url = getOrganizerPublicUrl(data.slug);
+    const title = data.name.trim() || 'Организатор';
+    if (!url) {
+      Alert.alert('Споделяне', 'Липсва адрес на сайта. Задай EXPO_PUBLIC_SITE_URL или EXPO_PUBLIC_API_URL.');
+      return;
+    }
+    const message = `${title}\n${url}`;
+    void Share.share({ message });
+  }, [data]);
+
+  const onToggleFollow = useCallback(() => {
+    if (!data?.organizerId) {
+      Alert.alert('Следване', 'Липсва идентификатор на организатора.');
+      return;
+    }
+    if (!user) {
+      Alert.alert('Вход', 'Влез в профила си, за да следваш организатори.', [
+        { text: 'Отказ', style: 'cancel' },
+        { text: 'Вход', onPress: () => router.push('/login') },
+      ]);
+      return;
+    }
+    void Haptics.selectionAsync();
+    followMutation.mutate(
       {
-        onSettled: () => {
-          setPendingIds((prev) => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-          });
+        organizerId: data.organizerId,
+        following: Boolean(data.is_following),
+      },
+      {
+        onError: (err) => {
+          const m = err.message.toLowerCase();
+          if (m.includes('unauthorized') || m.includes('401')) {
+            Alert.alert('Вход', 'Влез в профила си, за да следваш организатори.', [
+              { text: 'Отказ', style: 'cancel' },
+              { text: 'Вход', onPress: () => router.push('/login') },
+            ]);
+          }
         },
       },
     );
-  };
+  }, [data, followMutation, router, user]);
+
+  const onToggleSave = useCallback(
+    (item: FestivalListItem) => {
+      const id = item.festivalId;
+      setPendingIds((prev) => new Set(prev).add(id));
+      toggleSavedMutation.mutate(
+        { festivalId: item.festivalId, slug: item.slug, festival: item },
+        {
+          onSettled: () => {
+            setPendingIds((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+          },
+        },
+      );
+    },
+    [toggleSavedMutation],
+  );
+
+  const listHeader = useMemo(() => {
+    if (!data) return null;
+
+    const description = data.description?.trim();
+    const initials = getInitials(data.name);
+    const followerLine =
+      typeof data.followers_count === 'number'
+        ? followerCountLabel(data.followers_count)
+        : null;
+    const festivalCount = data.festivals.length;
+    const sectionSubtitle =
+      festivalCount === 0
+        ? 'Няма предстоящи събития в каталога'
+        : festivalCount === 1
+          ? '1 предстоящо събитие'
+          : `${festivalCount} предстоящи събития`;
+
+    return (
+      <View>
+        <View style={styles.headerRow}>
+          <PressableScale
+            onPress={() => router.back()}
+            pressedScale={0.97}
+            pressedOpacity={0.85}
+            style={styles.backButton}>
+            <Ionicons name="chevron-back" size={18} color={festivalUi.colors.text} />
+            <Text style={styles.backLabel}>Назад</Text>
+          </PressableScale>
+
+          <View style={styles.headerActions}>
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel="Сподели организатора"
+              onPress={handleShare}
+              pressedScale={0.95}
+              pressedOpacity={0.85}
+              style={styles.iconAction}>
+              <Ionicons name="share-outline" size={20} color={festivalUi.colors.text} />
+            </PressableScale>
+
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={data.is_following ? 'Отследвай' : 'Следвай'}
+              disabled={followMutation.isPending || !data.organizerId}
+              onPress={onToggleFollow}
+              pressedScale={0.97}
+              pressedOpacity={0.9}
+              style={[
+                styles.followButton,
+                data.is_following ? styles.followButtonActive : styles.followButtonInactive,
+                (followMutation.isPending || !data.organizerId) && styles.followButtonDisabled,
+              ]}>
+              {followMutation.isPending ? (
+                <ActivityIndicator
+                  size="small"
+                  color={data.is_following ? festivalUi.colors.text : '#FFFFFF'}
+                />
+              ) : (
+                <Reanimated.View
+                  key={data.is_following ? 'following' : 'unfollowing'}
+                  entering={FadeIn.duration(180)}
+                  style={styles.followButtonInner}>
+                  <Ionicons
+                    name={data.is_following ? 'checkmark' : 'add'}
+                    size={16}
+                    color={data.is_following ? festivalUi.colors.text : '#FFFFFF'}
+                  />
+                  <Text
+                    style={[
+                      styles.followButtonText,
+                      data.is_following ? styles.followButtonTextOutline : styles.followButtonTextFilled,
+                    ]}
+                    numberOfLines={1}>
+                    {data.is_following ? 'Следваш' : 'Следвай'}
+                  </Text>
+                </Reanimated.View>
+              )}
+            </PressableScale>
+          </View>
+        </View>
+
+        {followerLine ? (
+          <AnimatedCount
+            value={followerLine}
+            style={styles.followerHint}
+            numberOfLines={1}
+          />
+        ) : null}
+
+        <Reanimated.View entering={FadeIn.duration(240)}>
+          <HeaderHero
+            name={data.name}
+            city={data.city}
+            verified={Boolean(data.verified)}
+            coverUrl={data.cover_image_url}
+            logoUrl={data.logo_url}
+            initials={initials}
+          />
+        </Reanimated.View>
+
+        <Reanimated.View
+          style={styles.topSection}
+          entering={FadeInDown.duration(260).delay(80)}>
+          {description ? (
+            <View style={styles.infoCard}>
+              <Text style={styles.infoLabel}>За организатора</Text>
+              <Text style={styles.description}>{description}</Text>
+            </View>
+          ) : null}
+
+          {socialLinks.length > 0 ? (
+            <View style={styles.infoCard}>
+              <Text style={styles.infoLabel}>Връзки</Text>
+              <OrganizerSocialIconRow links={socialLinks} />
+            </View>
+          ) : null}
+
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionTitle}>Събития от този организатор</Text>
+            <Text style={styles.sectionSubtitle}>{sectionSubtitle}</Text>
+          </View>
+        </Reanimated.View>
+      </View>
+    );
+  }, [
+    data,
+    followMutation.isPending,
+    handleShare,
+    onToggleFollow,
+    router,
+    socialLinks,
+  ]);
 
   if (!slug) {
     return (
@@ -107,20 +419,51 @@ export default function OrganizerProfileScreen() {
     return (
       <View style={[styles.screen, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerRow}>
-          <View style={styles.backButtonGhost} />
+          <Skeleton width={80} height={34} radius={skeletonRadii.pill} />
+          <View style={styles.headerActionsGhost}>
+            <Skeleton width={40} height={40} radius={skeletonRadii.pill} />
+            <Skeleton width={118} height={40} radius={skeletonRadii.pill} />
+          </View>
         </View>
         <View style={styles.heroSkeleton}>
-          <View style={styles.avatarSkeleton} />
-          <View style={styles.heroLineSkeletonWide} />
-          <View style={styles.heroLineSkeleton} />
+          <Skeleton
+            width={skeletonRhythm.thumbSmall + 18}
+            height={skeletonRhythm.thumbSmall + 18}
+            radius={(skeletonRhythm.thumbSmall + 18) / 2}
+          />
+          <Skeleton
+            height={22}
+            width={'70%'}
+            radius={skeletonRadii.line}
+            style={styles.heroLineSpaceWide}
+          />
+          <Skeleton
+            height={skeletonRhythm.lineLg}
+            width={'44%'}
+            radius={skeletonRadii.line}
+            style={styles.heroLineSpace}
+          />
         </View>
-        <View style={styles.infoSkeleton}>
-          <View style={styles.lineSkeletonWide} />
-          <View style={styles.lineSkeleton} />
-          <View style={styles.lineSkeletonShort} />
+        <View style={styles.blockPad}>
+          <Skeleton height={skeletonRhythm.lineLg} width={'100%'} style={styles.skeletonLineSpace} />
+          <Skeleton height={skeletonRhythm.lineLg} width={'72%'} style={styles.skeletonLineSpace} />
+          <Skeleton height={skeletonRhythm.lineLg} width={'100%'} style={styles.skeletonLineSpace} />
         </View>
-        <View style={styles.cardSkeleton} />
-        <View style={styles.cardSkeleton} />
+        <View style={[styles.infoSkeleton, { marginHorizontal: festivalUi.screenPadding }]}>
+          <Skeleton height={18} width={'78%'} />
+          <Skeleton height={skeletonRhythm.lineLg} width={'58%'} style={styles.heroLineSpace} />
+          <Skeleton height={skeletonRhythm.lineLg} width={'38%'} style={styles.skeletonLineSpace} />
+        </View>
+        <Skeleton
+          height={132}
+          radius={skeletonRadii.card}
+          style={[styles.cardSkeleton, { marginHorizontal: festivalUi.screenPadding }]}
+        />
+        <Skeleton
+          height={132}
+          radius={skeletonRadii.card}
+          style={[styles.cardSkeleton, { marginHorizontal: festivalUi.screenPadding }]}
+        />
       </View>
     );
   }
@@ -135,11 +478,6 @@ export default function OrganizerProfileScreen() {
       </View>
     );
   }
-
-  const description = data.description?.trim();
-  const hasCover = Boolean(data.cover_image_url);
-  const hasLogo = Boolean(data.logo_url);
-  const initials = getInitials(data.name);
 
   return (
     <FlatList
@@ -162,118 +500,16 @@ export default function OrganizerProfileScreen() {
           colors={[festivalUi.colors.text]}
         />
       }
-      ListHeaderComponent={
-        <View>
-          <View style={styles.headerRow}>
-            <Pressable
-              onPress={() => router.back()}
-              style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}>
-              <Ionicons name="chevron-back" size={18} color={festivalUi.colors.text} />
-              <Text style={styles.backLabel}>Назад</Text>
-            </Pressable>
-          </View>
-          <View style={styles.heroCard}>
-            {hasCover && data.cover_image_url ? (
-              <>
-                <ExpoImage
-                  source={{ uri: data.cover_image_url }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                  transition={180}
-                  cachePolicy="memory-disk"
-                />
-                <LinearGradient
-                  pointerEvents="none"
-                  colors={['rgba(17,24,39,0.08)', 'rgba(17,24,39,0.32)', 'rgba(17,24,39,0.74)']}
-                  locations={[0, 0.48, 1]}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View style={styles.heroTextOverlay}>
-                  <Text style={styles.heroTitleImage} numberOfLines={2}>
-                    {data.name}
-                  </Text>
-                  {data.city ? (
-                    <View style={styles.heroCityPill}>
-                      <Ionicons name="location-outline" size={14} color="#FFFFFF" />
-                      <Text style={styles.heroCityText} numberOfLines={1}>
-                        {data.city}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              </>
-            ) : (
-              <LinearGradient colors={['#FDF2F8', '#EEF2FF', '#ECFDF5']} style={styles.coverFallback}>
-                <View style={styles.avatarWrap}>
-                  {hasLogo && data.logo_url ? (
-                    <ExpoImage source={{ uri: data.logo_url }} style={styles.avatarImage} contentFit="cover" />
-                  ) : (
-                    <Text style={styles.avatarInitials}>{initials}</Text>
-                  )}
-                </View>
-                <Text style={styles.heroTitleFallback} numberOfLines={2}>
-                  {data.name}
-                </Text>
-                {data.city ? (
-                  <View style={styles.fallbackCityRow}>
-                    <Ionicons name="location-outline" size={15} color={festivalUi.colors.secondary} />
-                    <Text style={styles.fallbackCityText} numberOfLines={1}>
-                      {data.city}
-                    </Text>
-                  </View>
-                ) : null}
-              </LinearGradient>
-            )}
-          </View>
-          <View style={styles.topSection}>
-            {description ? (
-              <View style={styles.infoCard}>
-                <Text style={styles.infoLabel}>За организатора</Text>
-                <Text style={styles.description}>{description}</Text>
-              </View>
-            ) : null}
-            {links.length > 0 ? (
-              <View style={styles.infoCard}>
-                <Text style={styles.infoLabel}>Връзки</Text>
-                <View style={styles.linksList}>
-                  {links.map((link) => (
-                    <Pressable
-                      key={link.key}
-                      onPress={() => {
-                        void Linking.openURL(link.url);
-                      }}
-                      style={({ pressed }) => [styles.linkRow, pressed && styles.linkRowPressed]}>
-                      <View style={styles.linkIconWrap}>
-                        <Ionicons name={link.icon} size={18} color={festivalUi.colors.text} />
-                      </View>
-                      <View style={styles.linkTextWrap}>
-                        <Text style={styles.linkLabel}>{link.label}</Text>
-                        <Text style={styles.linkValue} numberOfLines={1}>
-                          {link.value}
-                        </Text>
-                      </View>
-                      <Ionicons name="open-outline" size={18} color={festivalUi.colors.secondary} />
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            ) : null}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Събития от този организатор</Text>
-              {data.festivals.length > 0 ? (
-                <Text style={styles.sectionCount}>
-                  {data.festivals.length}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-        </View>
-      }
+      ListHeaderComponent={listHeader}
       ListEmptyComponent={
         <View style={styles.emptyState}>
-          <Ionicons name="calendar-outline" size={42} color={festivalUi.colors.muted} style={styles.emptyIcon} />
-          <Text style={styles.emptyTitle}>Все още няма качени събития.</Text>
-          <Text style={styles.emptySubtitle}>Когато този организатор публикува фестивали, ще ги видиш тук.</Text>
+          <View style={styles.emptyIllustration}>
+            <Ionicons name="calendar-outline" size={36} color={festivalUi.colors.muted} />
+          </View>
+          <Text style={styles.emptyTitle}>Няма предстоящи фестивали</Text>
+          <Text style={styles.emptySubtitle}>
+            Когато този организатор публикува нови събития в Festivo, ще се появят тук.
+          </Text>
         </View>
       }
       renderItem={({ item }) => (
@@ -302,7 +538,79 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     paddingHorizontal: festivalUi.screenPadding,
-    marginBottom: 12,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    minHeight: 40,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+  headerActionsGhost: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  iconAction: {
+    width: 40,
+    height: 40,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  followButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    minHeight: 40,
+    maxWidth: 148,
+  },
+  followButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  followButtonInactive: {
+    backgroundColor: festivalUi.colors.buttonBg,
+    borderColor: festivalUi.colors.buttonBg,
+  },
+  followButtonActive: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#D1D5DB',
+  },
+  followButtonDisabled: {
+    opacity: 0.55,
+  },
+  followButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  followButtonTextFilled: {
+    color: '#FFFFFF',
+  },
+  followButtonTextOutline: {
+    color: festivalUi.colors.text,
+  },
+  followerHint: {
+    marginHorizontal: festivalUi.screenPadding,
+    marginTop: -2,
+    marginBottom: 10,
+    fontSize: 13,
+    fontWeight: '600',
+    color: festivalUi.colors.secondary,
+    textAlign: 'right',
   },
   backButton: {
     alignSelf: 'flex-start',
@@ -315,15 +623,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     backgroundColor: '#FFFFFF',
-  },
-  backButtonGhost: {
-    width: 80,
-    height: 34,
-    borderRadius: 999,
-    backgroundColor: '#F3F4F6',
-  },
-  backButtonPressed: {
-    opacity: 0.72,
+    flexShrink: 0,
   },
   backLabel: {
     color: festivalUi.colors.text,
@@ -344,6 +644,13 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 4,
   },
+  heroTitleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    rowGap: 8,
+  },
   heroTextOverlay: {
     position: 'absolute',
     left: 20,
@@ -351,6 +658,9 @@ const styles = StyleSheet.create({
     bottom: 20,
   },
   heroTitleImage: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     color: '#FFFFFF',
     fontSize: 30,
     lineHeight: 35,
@@ -405,8 +715,25 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: '800',
   },
-  heroTitleFallback: {
+  fallbackTitleBlock: {
     marginTop: 16,
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  fallbackTitleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    rowGap: 8,
+    paddingHorizontal: 4,
+    maxWidth: '100%',
+  },
+  heroTitleFallback: {
+    flexShrink: 1,
+    maxWidth: '90%',
     color: festivalUi.colors.text,
     fontSize: 28,
     lineHeight: 33,
@@ -426,9 +753,13 @@ const styles = StyleSheet.create({
   },
   topSection: {
     paddingHorizontal: festivalUi.screenPadding,
-    paddingTop: 16,
-    paddingBottom: 2,
-    gap: 14,
+    paddingTop: 20,
+    paddingBottom: 8,
+    gap: 16,
+  },
+  sectionBlock: {
+    gap: 6,
+    marginBottom: 4,
   },
   infoCard: {
     backgroundColor: '#FFFFFF',
@@ -455,75 +786,17 @@ const styles = StyleSheet.create({
     lineHeight: 25,
     color: '#374151',
   },
-  linksList: {
-    marginTop: 10,
-    gap: 10,
-  },
-  linkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 15,
-    backgroundColor: '#F9FAFB',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-  },
-  linkRowPressed: {
-    opacity: 0.78,
-    transform: [{ scale: 0.99 }],
-  },
-  linkIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  linkTextWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  linkLabel: {
-    color: festivalUi.colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  linkValue: {
-    marginTop: 3,
-    color: festivalUi.colors.secondary,
-    fontSize: 13,
-  },
-  sectionHeader: {
-    marginTop: 4,
-    marginBottom: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
   sectionTitle: {
-    flex: 1,
     color: festivalUi.colors.text,
     fontSize: 22,
     lineHeight: 27,
     fontWeight: '800',
   },
-  sectionCount: {
-    minWidth: 34,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    overflow: 'hidden',
-    backgroundColor: '#111827',
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    textAlign: 'center',
+  sectionSubtitle: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600',
+    color: festivalUi.colors.secondary,
   },
   cardWrap: {
     paddingHorizontal: festivalUi.screenPadding,
@@ -548,7 +821,7 @@ const styles = StyleSheet.create({
   },
   errorSubtitle: {
     marginTop: 8,
-    marginBottom: 4,
+    marginBottom: 12,
     fontSize: 15,
     lineHeight: 22,
     color: festivalUi.colors.secondary,
@@ -556,17 +829,25 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     paddingHorizontal: festivalUi.screenPadding,
-    paddingVertical: 30,
+    paddingVertical: 28,
     alignItems: 'center',
     marginHorizontal: festivalUi.screenPadding,
-    marginTop: 4,
+    marginTop: 6,
+    marginBottom: 8,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FAFAFA',
+    gap: 8,
   },
-  emptyIcon: {
-    marginBottom: 12,
+  emptyIllustration: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
   emptyTitle: {
     color: festivalUi.colors.text,
@@ -575,14 +856,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptySubtitle: {
-    marginTop: 8,
     color: festivalUi.colors.secondary,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
   },
+  blockPad: {
+    paddingHorizontal: festivalUi.screenPadding,
+    marginTop: 8,
+  },
+  skeletonLineSpace: {
+    marginTop: 10,
+  },
+  heroLineSpaceWide: {
+    marginTop: 18,
+  },
+  heroLineSpace: {
+    marginTop: 12,
+  },
   heroSkeleton: {
     height: 244,
+    marginHorizontal: festivalUi.screenPadding,
     borderRadius: 24,
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
@@ -590,26 +884,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-  },
-  avatarSkeleton: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    backgroundColor: '#E5E7EB',
-  },
-  heroLineSkeletonWide: {
-    height: 22,
-    width: '70%',
-    borderRadius: 8,
-    marginTop: 18,
-    backgroundColor: '#E5E7EB',
-  },
-  heroLineSkeleton: {
-    height: 14,
-    width: '44%',
-    borderRadius: 7,
-    marginTop: 10,
-    backgroundColor: '#E5E7EB',
   },
   infoSkeleton: {
     marginTop: 16,
@@ -619,32 +893,7 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: '#FFFFFF',
   },
-  lineSkeletonWide: {
-    height: 18,
-    width: '78%',
-    borderRadius: 6,
-    backgroundColor: '#E5E7EB',
-  },
-  lineSkeleton: {
-    height: 14,
-    width: '58%',
-    borderRadius: 6,
-    marginTop: 12,
-    backgroundColor: '#E5E7EB',
-  },
-  lineSkeletonShort: {
-    height: 14,
-    width: '38%',
-    borderRadius: 6,
-    marginTop: 10,
-    backgroundColor: '#E5E7EB',
-  },
   cardSkeleton: {
-    height: 132,
     marginTop: 12,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
 });

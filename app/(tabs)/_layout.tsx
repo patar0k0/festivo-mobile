@@ -28,6 +28,15 @@ export default function TabsGroupLayout() {
         }}
       />
       <Tabs.Screen
+        name="map"
+        options={{
+          title: 'Карта',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name="map-outline" size={focused ? 24 : 22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="saved"
         options={{
           title: 'Запазени',

@@ -31,6 +31,10 @@ export type FestivalListItem = {
   tags?: string[];
   is_verified?: boolean;
   is_vip?: boolean;
+  is_promoted?: boolean;
+  /** Map markers — WGS84 when API provides coordinates */
+  lat?: number;
+  lng?: number;
 };
 
 export type FestivalDetail = {
@@ -50,10 +54,37 @@ export type FestivalDetail = {
   organizer?: {
     slug?: string;
     name?: string;
+    id?: string;
+    logo_url?: string | null;
+    verified?: boolean | null;
   };
   start_time?: string | null;
   end_time?: string | null;
+  category?: string;
+  tags?: string[];
+  is_verified?: boolean;
+  is_promoted?: boolean;
+  location?: {
+    lat?: number | null;
+    lng?: number | null;
+    address?: string | null;
+    location_name?: string | null;
+    place_id?: string | null;
+  };
 };
+
+function optionalTrimmedString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function parseOptionalCoord(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const n = Number.parseFloat(value.trim());
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -112,6 +143,10 @@ function parseListItem(raw: unknown): FestivalListItem | null {
 
   const is_verified = Boolean(o.is_verified ?? o.verified ?? o.isVerified);
   const is_vip = Boolean(o.is_vip ?? o.vip ?? o.isVip);
+  const is_promoted = Boolean(o.is_promoted ?? o.isPromoted);
+
+  const latParsed = parseOptionalCoord(o.lat ?? o.latitude);
+  const lngParsed = parseOptionalCoord(o.lng ?? o.longitude);
 
   return {
     festivalId,
@@ -134,6 +169,9 @@ function parseListItem(raw: unknown): FestivalListItem | null {
     tags,
     is_verified: is_verified || undefined,
     is_vip: is_vip || undefined,
+    is_promoted: is_promoted || undefined,
+    lat: latParsed,
+    lng: lngParsed,
   };
 }
 
@@ -194,6 +232,55 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
     org?.name != null && String(org.name).trim() ? String(org.name) : undefined;
   const organizer_slug =
     org?.slug != null && String(org.slug).trim() ? String(org.slug).trim() : undefined;
+  const organizer_id =
+    org?.id != null && String(org.id).trim() ? String(org.id).trim() : undefined;
+  const organizer_logo =
+    org?.logo_url != null && String(org.logo_url).trim()
+      ? String(org.logo_url).trim()
+      : org?.logoUrl != null && String(org.logoUrl).trim()
+        ? String(org.logoUrl).trim()
+        : undefined;
+  const organizer_verified =
+    typeof org?.verified === 'boolean'
+      ? org.verified
+      : typeof org?.is_verified === 'boolean'
+        ? org.is_verified
+        : null;
+
+  const loc = asRecord(o.location);
+  let location: FestivalDetail['location'];
+  if (loc && typeof loc === 'object') {
+    const lat = parseOptionalCoord(loc.lat ?? loc.latitude);
+    const lng = parseOptionalCoord(loc.lng ?? loc.longitude);
+    location = {
+      lat: lat ?? null,
+      lng: lng ?? null,
+      address: optionalTrimmedString(loc.address) ?? null,
+      location_name: optionalTrimmedString(loc.location_name ?? loc.locationName) ?? null,
+      place_id: optionalTrimmedString(loc.place_id ?? loc.placeId) ?? null,
+    };
+    if (
+      location.lat == null &&
+      location.lng == null &&
+      !location.address &&
+      !location.location_name &&
+      !location.place_id
+    ) {
+      location = undefined;
+    }
+  }
+
+  const category = optionalTrimmedString(o.category ?? o.category_slug);
+  let tags: string[] | undefined;
+  if (Array.isArray(o.tags)) {
+    const t = o.tags
+      .map((x) => (typeof x === 'string' && x.trim() ? x.trim() : null))
+      .filter((x): x is string => x != null);
+    if (t.length) tags = t;
+  }
+
+  const is_verified_detail = Boolean(o.is_verified ?? o.verified ?? o.isVerified);
+  const is_promoted_detail = Boolean(o.is_promoted ?? o.isPromoted);
 
   return {
     festivalId,
@@ -208,14 +295,22 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
     gallery_urls: gallery_urls.length > 0 ? gallery_urls : undefined,
     organizer_name,
     organizer:
-      organizer_slug || organizer_name
+      organizer_slug || organizer_name || organizer_id
         ? {
+            id: organizer_id,
             slug: organizer_slug,
             name: organizer_name,
+            logo_url: organizer_logo ?? null,
+            verified: organizer_verified,
           }
         : undefined,
     start_time: start_time?.trim() ? start_time : null,
     end_time: end_time?.trim() ? end_time : null,
+    category,
+    tags,
+    is_verified: is_verified_detail || undefined,
+    is_promoted: is_promoted_detail || undefined,
+    location,
   };
 }
 
@@ -263,26 +358,7 @@ export async function getFestivals(params?: GetFestivalsParams): Promise<Festiva
         ? record.data
         : [];
   if (!Array.isArray(rawList)) return [];
-  const list = rawList.map(parseListItem).filter((x): x is FestivalListItem => x != null);
-  // #region agent log
-  fetch('http://127.0.0.1:7454/ingest/f7b1cd1d-10a4-4fd2-b861-c1fca419479c', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3a6a16' },
-    body: JSON.stringify({
-      sessionId: '3a6a16',
-      runId: 'pre',
-      hypothesisId: 'H1',
-      location: 'festivals.ts:getFestivals',
-      message: 'list fetch parsed',
-      data: {
-        count: list.length,
-        savedTrueCount: list.filter((x) => x.saved).length,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-  return list;
+  return rawList.map(parseListItem).filter((x): x is FestivalListItem => x != null);
 }
 
 export async function getFestival(slug: string): Promise<FestivalDetail> {
@@ -298,23 +374,7 @@ export async function getFestival(slug: string): Promise<FestivalDetail> {
   }
   const body = await readJson(res);
   const payload = asRecord(body)?.data ?? body;
-  const detail = parseDetail(payload, slug);
-  // #region agent log
-  fetch('http://127.0.0.1:7454/ingest/f7b1cd1d-10a4-4fd2-b861-c1fca419479c', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3a6a16' },
-    body: JSON.stringify({
-      sessionId: '3a6a16',
-      runId: 'pre',
-      hypothesisId: 'H1',
-      location: 'festivals.ts:getFestival',
-      message: 'detail fetch parsed',
-      data: { slug, festivalId: detail.festivalId, saved: detail.saved },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-  return detail;
+  return parseDetail(payload, slug);
 }
 
 /** Alias for detail prefetch / readability; same contract as {@link getFestival}. */

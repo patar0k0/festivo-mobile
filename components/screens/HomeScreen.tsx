@@ -4,11 +4,10 @@ import * as Haptics from 'expo-haptics';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { ListRenderItemInfo, SectionListRenderItemInfo, StyleProp, ViewStyle } from 'react-native';
 import {
     ActivityIndicator,
-    Animated,
     FlatList,
     Pressable,
     RefreshControl,
@@ -20,6 +19,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
+import { PressableScale } from '@/components/ui/PressableScale';
+import { Skeleton, skeletonRadii, skeletonRhythm } from '@/components/ui/Skeleton';
 import { festivalUi } from '@/components/ui/FestivalCard';
 import type { FestivalListItem } from '@/lib/api/festivals';
 import { getFestivalBySlug, getFestivals } from '@/lib/api/festivals';
@@ -44,30 +46,17 @@ function TrendingItemSeparator() {
   return <View style={styles.trendingItemSep} />;
 }
 
-function TrendingSkeletonPulse({ cardWidth }: { cardWidth: number }) {
-  const opacity = useRef(new Animated.Value(0.42)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.95, duration: 650, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.42, duration: 650, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [opacity]);
-  return (
-    <Animated.View
-      style={[styles.trendingSkeletonCard, { width: cardWidth, opacity }]}
-    />
-  );
-}
-
 function TrendingSkeleton({ cardWidth }: { cardWidth: number }) {
   return (
     <View style={[styles.trendingFlatListContent, styles.trendingSkeletonRow]}>
       {[0, 1, 2].map((k) => (
-        <TrendingSkeletonPulse key={k} cardWidth={cardWidth} />
+        <Skeleton
+          key={k}
+          width={cardWidth}
+          height={198}
+          radius={22}
+          style={styles.trendingSkeletonCard}
+        />
       ))}
     </View>
   );
@@ -76,11 +65,15 @@ function TrendingSkeleton({ cardWidth }: { cardWidth: number }) {
 function WeekSkeletonRow() {
   return (
     <View style={styles.compactSkeletonRow}>
-      <View style={styles.compactSkeletonThumb} />
+      <Skeleton
+        width={skeletonRhythm.thumb}
+        height={skeletonRhythm.thumb}
+        radius={skeletonRadii.thumb}
+      />
       <View style={styles.compactSkeletonBody}>
-        <View style={styles.skeletonLineLg} />
-        <View style={styles.skeletonLineSm} />
-        <View style={styles.skeletonLineMd} />
+        <Skeleton height={skeletonRhythm.lineLg} width={'88%'} />
+        <Skeleton height={skeletonRhythm.lineSm} width={'70%'} />
+        <Skeleton height={skeletonRhythm.lineMd} width={'55%'} />
       </View>
     </View>
   );
@@ -91,10 +84,14 @@ function PopularSkeletonRow() {
     <View style={styles.popularSkeletonRow}>
       <View style={styles.popularSkeletonAccent} />
       <View style={styles.popularSkeletonInner}>
-        <View style={styles.compactSkeletonThumb} />
+        <Skeleton
+          width={skeletonRhythm.thumb}
+          height={skeletonRhythm.thumb}
+          radius={skeletonRadii.thumb}
+        />
         <View style={styles.compactSkeletonBody}>
-          <View style={styles.skeletonLineLg} />
-          <View style={styles.skeletonLineSm} />
+          <Skeleton height={skeletonRhythm.lineLg} width={'88%'} />
+          <Skeleton height={skeletonRhythm.lineSm} width={'70%'} />
         </View>
       </View>
     </View>
@@ -146,7 +143,7 @@ function BookmarkButton({
       {isSaving ? (
         <ActivityIndicator size="small" color="#FFFFFF" />
       ) : (
-        <Ionicons name={filled ? 'bookmark' : 'bookmark-outline'} size={22} color="#FFFFFF" />
+        <AnimatedBookmark filled={filled} size={22} color="#FFFFFF" />
       )}
     </Pressable>
   );
@@ -171,21 +168,21 @@ function TrendingCard({
   const isSaving = Boolean(saveDisabled);
 
   return (
-    <Pressable
+    <PressableScale
       onPress={onPressCard}
-      style={({ pressed }) => [
-        { width },
-        { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-      ]}>
+      pressedScale={0.97}
+      pressedOpacity={0.92}
+      style={{ width }}>
       <View style={[styles.trendingCardInner, { width }]}>
         {uri ? (
           <ExpoImage
             source={{ uri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            transition={180}
+            transition={220}
             cachePolicy="memory-disk"
             priority="high"
+            placeholderContentFit="cover"
           />
         ) : (
           <>
@@ -220,7 +217,7 @@ function TrendingCard({
           style={styles.trendingBookmarkPosition}
         />
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -241,19 +238,18 @@ function CompactWeekCard({
   const bookmarkColor = item.saved ? COLORS.text : COLORS.secondary;
 
   return (
-    <Pressable
+    <PressableScale
       onPress={onPressCard}
-      style={({ pressed }) => [
-        styles.compactCard,
-        { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-      ]}>
+      pressedScale={0.985}
+      pressedOpacity={0.9}
+      style={styles.compactCard}>
       <View style={styles.compactThumb}>
         {uri ? (
           <ExpoImage
             source={{ uri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            transition={120}
+            transition={180}
             cachePolicy="memory-disk"
             priority="high"
           />
@@ -290,14 +286,10 @@ function CompactWeekCard({
         {isSaving ? (
           <ActivityIndicator size="small" color={bookmarkColor} />
         ) : (
-          <Ionicons
-            name={item.saved ? 'bookmark' : 'bookmark-outline'}
-            size={22}
-            color={bookmarkColor}
-          />
+          <AnimatedBookmark filled={item.saved} size={22} color={bookmarkColor} />
         )}
       </Pressable>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -318,12 +310,11 @@ function PopularCard({
   const bookmarkColor = item.saved ? COLORS.text : COLORS.secondary;
 
   return (
-    <Pressable
+    <PressableScale
       onPress={onPressCard}
-      style={({ pressed }) => [
-        styles.popularCard,
-        { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-      ]}>
+      pressedScale={0.985}
+      pressedOpacity={0.92}
+      style={styles.popularCard}>
       <View style={styles.popularAccentBar} />
       <View style={styles.popularInner}>
         <View style={styles.popularThumb}>
@@ -332,7 +323,7 @@ function PopularCard({
               source={{ uri }}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
-              transition={120}
+              transition={180}
               cachePolicy="memory-disk"
               priority="high"
             />
@@ -372,15 +363,11 @@ function PopularCard({
           {isSaving ? (
             <ActivityIndicator size="small" color={bookmarkColor} />
           ) : (
-            <Ionicons
-              name={item.saved ? 'bookmark' : 'bookmark-outline'}
-              size={22}
-              color={bookmarkColor}
-            />
+            <AnimatedBookmark filled={item.saved} size={22} color={bookmarkColor} />
           )}
         </Pressable>
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -771,9 +758,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   trendingSkeletonCard: {
-    height: 198,
-    borderRadius: 22,
-    backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
@@ -909,33 +893,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 12,
   },
-  compactSkeletonThumb: {
-    width: 72,
-    height: 72,
-    borderRadius: 10,
-    backgroundColor: '#F3F4F6',
-  },
   compactSkeletonBody: {
     flex: 1,
     gap: 8,
-  },
-  skeletonLineLg: {
-    height: 14,
-    borderRadius: 6,
-    backgroundColor: '#E5E7EB',
-    width: '88%',
-  },
-  skeletonLineMd: {
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#E5E7EB',
-    width: '55%',
-  },
-  skeletonLineSm: {
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#F3F4F6',
-    width: '70%',
   },
   popularSkeletonRow: {
     marginBottom: 12,

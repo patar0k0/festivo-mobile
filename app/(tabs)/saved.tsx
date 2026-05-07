@@ -2,9 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { PressableScale } from '@/components/ui/PressableScale';
+import { Skeleton, skeletonRadii } from '@/components/ui/Skeleton';
 import { FestivalCard, festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
 import type { FestivalListItem } from '@/lib/api/festivals';
 import { getSavedFestivals } from '@/lib/api/saved';
@@ -59,8 +61,8 @@ export default function SavedScreen() {
     return (
       <View style={[styles.screenContent, { paddingTop: insets.top + 12 }]}>
         <Text style={[festivalUi.typography.secondary, styles.loadingTitle]}>Зареждане на запазени…</Text>
-        <View style={styles.skeletonCard} />
-        <View style={[styles.skeletonCard, styles.skeletonSpacer]} />
+        <Skeleton height={140} radius={skeletonRadii.card} />
+        <Skeleton height={140} radius={skeletonRadii.card} style={styles.skeletonSpacer} />
       </View>
     );
   }
@@ -86,11 +88,13 @@ export default function SavedScreen() {
           <Ionicons name="bookmark-outline" size={64} color={festivalUi.colors.muted} style={styles.emptyIcon} />
           <Text style={styles.emptyTitle}>Нямаш запазени събития</Text>
           <Text style={styles.emptySubtitle}>Натисни 🔖 на събитие, за да го запазиш</Text>
-          <Pressable
+          <PressableScale
             onPress={() => router.push('/')}
-            style={({ pressed }) => [styles.primaryCta, pressed && styles.primaryCtaPressed]}>
+            pressedScale={0.97}
+            pressedOpacity={0.9}
+            style={styles.primaryCta}>
             <Text style={styles.primaryCtaText}>Разгледай събития</Text>
-          </Pressable>
+          </PressableScale>
         </View>
       </View>
     );
@@ -171,9 +175,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     borderRadius: 12,
   },
-  primaryCtaPressed: {
-    opacity: 0.88,
-  },
   primaryCtaText: {
     color: '#FFFFFF',
     fontSize: 16,
@@ -188,13 +189,6 @@ const styles = StyleSheet.create({
   },
   loadingTitle: {
     marginBottom: 16,
-  },
-  skeletonCard: {
-    height: 140,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   skeletonSpacer: {
     marginTop: 12,

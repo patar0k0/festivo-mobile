@@ -1,0 +1,163 @@
+import { Ionicons } from '@expo/vector-icons';
+import { memo } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
+import { PressableScale } from '@/components/ui/PressableScale';
+import { festivalUi } from '@/components/ui/FestivalCard';
+
+const BAR_HEIGHT = 58;
+
+type Props = {
+  saved: boolean;
+  saveBusy: boolean;
+  onSave: () => void;
+  onShare: () => void;
+  onMaps: () => void;
+  onCalendar: () => void;
+  mapsDisabled?: boolean;
+  calendarDisabled?: boolean;
+};
+
+export const FESTIVAL_STICKY_BAR_OFFSET = BAR_HEIGHT;
+
+export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
+  saved,
+  saveBusy,
+  onSave,
+  onShare,
+  onMaps,
+  onCalendar,
+  mapsDisabled,
+  calendarDisabled,
+}: Props) {
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 10);
+
+  return (
+    <View style={[styles.wrap, { paddingBottom: bottomPad }]} pointerEvents="box-none">
+      <View style={styles.inner}>
+        <ActionIcon
+          label={saved ? 'Запазено' : 'Запази'}
+          icon={saved ? 'bookmark' : 'bookmark-outline'}
+          bookmarkFilled={saved}
+          onPress={onSave}
+          disabled={saveBusy}
+          loading={saveBusy}
+          primary
+        />
+        <ActionIcon label="Сподели" icon="share-outline" onPress={onShare} />
+        <ActionIcon label="Карта" icon="map-outline" onPress={onMaps} disabled={mapsDisabled} />
+        <ActionIcon
+          label="Календар"
+          icon="calendar-outline"
+          onPress={onCalendar}
+          disabled={calendarDisabled}
+        />
+      </View>
+    </View>
+  );
+});
+
+function ActionIcon({
+  label,
+  icon,
+  bookmarkFilled,
+  onPress,
+  disabled,
+  loading,
+  primary,
+}: {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  /** When set, render an AnimatedBookmark (with pulse) instead of a plain Ionicon. */
+  bookmarkFilled?: boolean;
+  onPress: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  primary?: boolean;
+}) {
+  const showBookmark = typeof bookmarkFilled === 'boolean';
+  return (
+    <PressableScale
+      onPress={onPress}
+      disabled={disabled || loading}
+      pressedScale={0.96}
+      pressedOpacity={0.9}
+      style={[
+        styles.action,
+        primary && styles.actionPrimary,
+        (disabled || loading) && styles.actionDisabled,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={label}>
+      {loading ? (
+        <ActivityIndicator size="small" color="#FFFFFF" />
+      ) : showBookmark ? (
+        <AnimatedBookmark
+          filled={Boolean(bookmarkFilled)}
+          size={22}
+          color={primary ? '#FFFFFF' : festivalUi.colors.text}
+        />
+      ) : (
+        <Ionicons name={icon} size={22} color={primary ? '#FFFFFF' : festivalUi.colors.text} />
+      )}
+      <Text style={[styles.actionLabel, primary && styles.actionLabelPrimary]} numberOfLines={1}>
+        {label}
+      </Text>
+    </PressableScale>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E5E7EB',
+    ...Platform.select({
+      android: { elevation: 12 },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+    }),
+  },
+  inner: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingTop: 10,
+    minHeight: BAR_HEIGHT,
+  },
+  action: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    marginHorizontal: 2,
+    borderRadius: 14,
+    gap: 4,
+  },
+  actionPrimary: {
+    backgroundColor: festivalUi.colors.buttonBg,
+  },
+  actionDisabled: {
+    opacity: 0.45,
+  },
+  actionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: festivalUi.colors.text,
+  },
+  actionLabelPrimary: {
+    color: '#FFFFFF',
+  },
+});

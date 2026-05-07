@@ -2,12 +2,19 @@ import { apiFetch } from './client';
 import type { FestivalListItem } from './festivals';
 
 export type OrganizerDetail = {
+  /** Required for follow/unfollow API; omitted only if payload is malformed. */
+  organizerId?: string;
   slug: string;
   name: string;
+  verified?: boolean;
   city?: string;
   description?: string;
   logo_url?: string | null;
   cover_image_url?: string | null;
+  /** Present when the user is authenticated; absent/false when logged out or not following. */
+  is_following?: boolean;
+  /** Total followers; omit when unknown. */
+  followers_count?: number | null;
   links?: {
     website?: string;
     facebook?: string;
@@ -71,6 +78,17 @@ function optionalTrimmedString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function optionalBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value;
+  return undefined;
+}
+
+function optionalFollowersCount(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.floor(value));
+  return undefined;
+}
+
 export async function getOrganizerBySlug(slug: string): Promise<OrganizerDetail> {
   const path = `/api/mobile/organizers/${encodeURIComponent(slug)}`;
   const res = await apiFetch(path);
@@ -94,9 +112,26 @@ export async function getOrganizerBySlug(slug: string): Promise<OrganizerDetail>
     .map((item) => parseFestivalListItem(item))
     .filter((item): item is FestivalListItem => item != null);
 
+  const idRaw = organizer.id ?? organizer.organizer_id ?? organizer.organizerId;
+  const organizerId =
+    typeof idRaw === 'string' && idRaw.trim()
+      ? idRaw.trim()
+      : typeof idRaw === 'number'
+        ? String(idRaw)
+        : undefined;
+
   return {
+    organizerId,
     slug: String(organizer.slug ?? slug),
     name: String(organizer.name ?? ''),
+    verified:
+      optionalBoolean(organizer.verified) ??
+      optionalBoolean(organizer.is_verified) ??
+      optionalBoolean(organizer.isVerified),
+    is_following:
+      optionalBoolean(organizer.is_following) ??
+      optionalBoolean(organizer.isFollowing),
+    followers_count: optionalFollowersCount(organizer.followers_count ?? organizer.followersCount),
     city:
       optionalTrimmedString(organizer.city) ??
       optionalTrimmedString(organizer.city_name) ??

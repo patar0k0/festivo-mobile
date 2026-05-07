@@ -28,6 +28,12 @@
     "plugins": [
       "expo-router",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Festivo използва локацията, за да центрира картата близо до теб."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-branded.png",

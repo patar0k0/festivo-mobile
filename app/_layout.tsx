@@ -55,8 +55,22 @@ function RootStack() {
         <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
-        <Stack.Screen name="festival/[slug]" options={{ headerShown: false }} />
-        <Stack.Screen name="organizer/[slug]" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="festival/[slug]"
+          options={{
+            headerShown: false,
+            animation: 'slide_from_right',
+            animationDuration: 280,
+          }}
+        />
+        <Stack.Screen
+          name="organizer/[slug]"
+          options={{
+            headerShown: false,
+            animation: 'slide_from_right',
+            animationDuration: 280,
+          }}
+        />
         <Stack.Screen name="search" options={{ headerShown: false }} />
         <Stack.Screen
           name="profile-notifications"

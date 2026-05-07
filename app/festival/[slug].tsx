@@ -2,35 +2,54 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
+import * as Linking from 'expo-linking';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   LayoutAnimation,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from 'react-native';
+import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
-import type { FestivalDetail } from '@/lib/api/festivals';
-import { getFestival } from '@/lib/api/festivals';
-import { formatDateRangeRelative, getRelativeDateLabel } from '@/lib/festival/relativeDate';
+import { FestivalDetailStickyBar, FESTIVAL_STICKY_BAR_OFFSET } from '@/components/festival/FestivalDetailStickyBar';
+import { FestivalMapPreview } from '@/components/festival/FestivalMapPreview';
+import { VerifiedBadge } from '@/components/organizer/VerifiedBadge';
+import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
+import { PressableScale } from '@/components/ui/PressableScale';
+import { Skeleton, skeletonRadii, skeletonRhythm } from '@/components/ui/Skeleton';
+import { FestivalCard, festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
+import type { FestivalDetail, FestivalListItem } from '@/lib/api/festivals';
+import { getFestival, getFestivals } from '@/lib/api/festivals';
+import { formatDateRangeRelative } from '@/lib/festival/relativeDate';
+import { buildLocationQuery, openInMaps } from '@/lib/map/openInMaps';
+import { isValidCoordinatePair, looksLikeBulgaria } from '@/lib/map/coordinates';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
+import { getFestivalIcsUrl, getFestivalPublicUrl } from '@/lib/site';
 
-const HERO_H = Platform.OS === 'android' ? 250 : 286;
-const GALLERY_H = 120;
-const CTA_H = 50;
-const DESC_COLLAPSED_LINES = 7;
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const HERO_H = Platform.OS === 'android' ? 268 : 300;
+const GALLERY_THUMB = 108;
+const DESC_COLLAPSED_LINES = 6;
+const DESC_READ_MORE_MIN_CHARS = 200;
 const SAVE_PENDING_MS = 25000;
+const SCROLL_BOTTOM_EXTRA = 28;
 
 const HERO_PALETTE = ['#4F46E5', '#0EA5E9', '#059669', '#D97706', '#7C3AED', '#DB2777'];
 
@@ -54,7 +73,6 @@ function formatTimeShort(raw: string): string | null {
   return t;
 }
 
-/** Duration / span label when dates or times are present */
 function quickDurationLabel(d: FestivalDetail): string | null {
   const { start_date, end_date, start_time, end_time } = d;
   if (!start_date?.trim()) return null;
@@ -93,29 +111,20 @@ function HeroBookmarkButton({
   right: number;
 }) {
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.heroBookmark,
-        { top, right },
-        isBusy && styles.heroBookmarkSaving,
-        pressed && !isBusy && styles.heroBookmarkPressed,
-        { transform: [{ scale: pressed ? 0.92 : isBusy ? 0.96 : 1 }] },
-      ]}
+      pressedScale={0.92}
+      style={[styles.heroBookmark, { top, right }, isBusy && styles.heroBookmarkSaving]}
       hitSlop={8}>
       {isBusy ? (
         <ActivityIndicator size="small" color="#FFFFFF" />
       ) : (
-        <Ionicons name={filled ? 'bookmark' : 'bookmark-outline'} size={22} color="#FFFFFF" />
+        <AnimatedBookmark filled={filled} size={22} color="#FFFFFF" />
       )}
-    </Pressable>
+    </PressableScale>
   );
 }
 
-/**
- * Fullscreen image lightbox. Only mount while open so no hidden Modal stays in the native layer.
- * Android hardware back: Modal onRequestClose → same path as backdrop / X (closes lightbox only).
- */
 function GalleryLightbox({
   uri,
   onClose,
@@ -163,6 +172,47 @@ function GalleryLightbox({
   );
 }
 
+const MetaChip = memo(function MetaChip({
+  icon,
+  label,
+  dark,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  dark?: boolean;
+}) {
+  return (
+    <View style={[styles.metaChip, dark && styles.metaChipDark]}>
+      <Ionicons name={icon} size={14} color={dark ? 'rgba(255,255,255,0.95)' : festivalUi.colors.text} />
+      <Text style={[styles.metaChipText, dark && styles.metaChipTextDark]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+});
+
+const QuickTile = memo(function QuickTile({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.quickTile}>
+      <View style={styles.quickTileIcon}>
+        <Ionicons name={icon} size={18} color={festivalUi.colors.text} />
+      </View>
+      <Text style={styles.quickTileLabel}>{label}</Text>
+      <Text style={styles.quickTileValue} numberOfLines={3}>
+        {value}
+      </Text>
+    </View>
+  );
+});
+
 export default function FestivalDetailScreen() {
   const { slug: slugParam } = useLocalSearchParams<{ slug: string }>();
   const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam;
@@ -174,9 +224,7 @@ export default function FestivalDetailScreen() {
   const [galleryVisible, setGalleryVisible] = useState(false);
   const [selectedGalleryUri, setSelectedGalleryUri] = useState<string | null>(null);
   const galleryFade = useRef(new Animated.Value(0)).current;
-  /** When true, user intends the lightbox open; close completion must not clear if reopened. */
   const lightboxOpenIntentRef = useRef(false);
-  /** Bumps on each open/close/blur so stale animation callbacks cannot touch state. */
   const lightboxAnimTokenRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const pendingClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -186,6 +234,20 @@ export default function FestivalDetailScreen() {
     queryFn: () => getFestival(slug ?? ''),
     enabled: Boolean(slug),
   });
+
+  const { data: relatedRaw } = useQuery({
+    queryKey: ['festivals', 'trending', 'related', slug],
+    queryFn: () => getFestivals({ sort: 'trending', limit: 28 }),
+    enabled: Boolean(slug && data),
+    staleTime: 60_000,
+  });
+
+  const relatedList = useMemo(() => {
+    if (!relatedRaw || !data) return [];
+    return relatedRaw.filter((x) => x.slug !== data.slug).slice(0, 12);
+  }, [relatedRaw, data]);
+
+  const stickyBottomReserve = FESTIVAL_STICKY_BAR_OFFSET + Math.max(insets.bottom, 10) + SCROLL_BOTTOM_EXTRA;
 
   useEffect(() => {
     return () => {
@@ -221,10 +283,10 @@ export default function FestivalDetailScreen() {
     });
   }, []);
 
-  const toggleDescriptionExpanded = () => {
+  const toggleDescriptionExpanded = useCallback(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setDescriptionExpanded((v) => !v);
-  };
+  }, []);
 
   const openGallery = useCallback(
     (uri: string) => {
@@ -272,14 +334,7 @@ export default function FestivalDetailScreen() {
     (festival: FestivalDetail) => {
       const id = festival.festivalId;
       if (saveInFlightRef.current) {
-        if (__DEV__) {
-          console.log('[festivo] detail save ignored (in flight)', { slug: festival.slug, festivalId: id });
-        }
         return;
-      }
-      if (__DEV__) {
-        console.log('[festivo] detail save pressed', { slug: festival.slug, festivalId: id });
-        console.log('[festivo] detail save mutation start', { slug: festival.slug, festivalId: id });
       }
       saveInFlightRef.current = true;
       setPendingIds((prev) => new Set(prev).add(id));
@@ -287,9 +342,6 @@ export default function FestivalDetailScreen() {
         clearTimeout(pendingClearTimeoutRef.current);
       }
       pendingClearTimeoutRef.current = setTimeout(() => {
-        if (__DEV__) {
-          console.log('[festivo] detail save pending timeout cleanup', { festivalId: id });
-        }
         clearSavePending(id);
       }, SAVE_PENDING_MS);
 
@@ -302,9 +354,6 @@ export default function FestivalDetailScreen() {
         },
         {
           onSettled: () => {
-            if (__DEV__) {
-              console.log('[festivo] detail save pendingIds cleanup (settled)', { festivalId: id });
-            }
             clearSavePending(id);
           },
         },
@@ -314,7 +363,53 @@ export default function FestivalDetailScreen() {
   );
 
   const bookmarkTop = insets.top + 10;
-  const bookmarkRight = 16;
+  const bookmarkRight = 14;
+
+  const handleShare = useCallback(() => {
+    if (!data) return;
+    const url = getFestivalPublicUrl(data.slug);
+    const line1 = data.title.trim();
+    if (!url) {
+      Alert.alert('Споделяне', 'Липсва адрес на сайта. Задай EXPO_PUBLIC_SITE_URL или EXPO_PUBLIC_API_URL.');
+      return;
+    }
+    void Share.share({ message: `${line1}\n${url}` });
+  }, [data]);
+
+  const mapsQueryFromDetail = useCallback((d: FestivalDetail) => {
+    return buildLocationQuery([
+      d.location?.location_name,
+      d.location?.address,
+      d.city,
+      d.title,
+    ]);
+  }, []);
+
+  const handleOpenMaps = useCallback(() => {
+    if (!data) return;
+    const lat = data.location?.lat ?? null;
+    const lng = data.location?.lng ?? null;
+    openInMaps({
+      latitude: lat,
+      longitude: lng,
+      queryFallback: mapsQueryFromDetail(data),
+    });
+  }, [data, mapsQueryFromDetail]);
+
+  const handleCalendar = useCallback(async () => {
+    if (!data) return;
+    const ics = getFestivalIcsUrl(data.slug);
+    if (!ics) {
+      Alert.alert('Календар', 'Не можем да отворим календарния линк. Провери EXPO_PUBLIC_SITE_URL.');
+      return;
+    }
+    void Haptics.selectionAsync();
+    try {
+      await Linking.openURL(ics);
+    } catch {
+      void Share.share({ message: `${data.title}\n${ics}` });
+    }
+  }, [data]);
 
   if (!slug) {
     return (
@@ -331,11 +426,11 @@ export default function FestivalDetailScreen() {
         contentContainerStyle={styles.scrollContentBottom}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
-        <View style={[styles.heroSkeleton, { height: HERO_H }]} />
+        <Skeleton width={'100%'} height={HERO_H} radius={0} />
         <View style={styles.blockPad}>
-          <View style={styles.skeletonLine} />
-          <View style={[styles.skeletonLine, styles.skeletonLineShort]} />
-          <View style={styles.ctaSkeleton} />
+          <Skeleton height={skeletonRhythm.lineLg} width={'100%'} style={styles.skeletonLineSpace} />
+          <Skeleton height={skeletonRhythm.lineLg} width={'72%'} style={styles.skeletonLineSpace} />
+          <Skeleton height={120} width={'100%'} radius={skeletonRadii.card} style={styles.skeletonLineSpace} />
         </View>
       </ScrollView>
     );
@@ -362,19 +457,34 @@ export default function FestivalDetailScreen() {
     typeof data.image_url === 'string' && data.image_url.trim() ? data.image_url.trim() : undefined;
   const allGallery = data.gallery_urls ?? [];
   const galleryStrip =
-    allGallery.length > 1
-      ? allGallery.filter((u) => u !== coverUri)
-      : [];
+    allGallery.length > 1 ? allGallery.filter((u) => u !== coverUri) : allGallery.length ? allGallery : [];
 
-  const dateLineHero = getRelativeDateLabel(data.start_date);
   const dateRangeLine = formatDateRangeRelative(data.start_date, data.end_date);
   const durationLine = quickDurationLabel(data);
   const description = (data.description ?? '').trim();
   const isSaving = pendingIds.has(data.festivalId);
-  const primaryLabel = data.saved ? 'Запазено' : 'Запази събитието';
   const organizerSlug = data.organizer?.slug?.trim();
   const organizerName = data.organizer?.name?.trim() || data.organizer_name?.trim() || '';
   const hasOrganizerProfile = Boolean(organizerSlug);
+
+  const lat = data.location?.lat ?? null;
+  const lng = data.location?.lng ?? null;
+  const hasMapCoords =
+    lat != null &&
+    lng != null &&
+    isValidCoordinatePair(lat, lng) &&
+    looksLikeBulgaria(lat, lng);
+
+  const mapAddressLine = buildLocationQuery([
+    data.location?.location_name,
+    data.location?.address,
+    data.city,
+  ]);
+
+  const showReadMore = description.length >= DESC_READ_MORE_MIN_CHARS;
+
+  const categoryLabel = data.category?.trim();
+  const tagPreview = data.tags?.slice(0, 2).join(' · ');
 
   return (
     <View style={styles.root}>
@@ -386,19 +496,19 @@ export default function FestivalDetailScreen() {
           fadeAnim={galleryFade}
         />
       ) : null}
+
       <ScrollView
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContentBottom}>
-        {/* Hero */}
-        <View style={styles.heroWrap}>
+        contentContainerStyle={[styles.scrollContentBottom, { paddingBottom: stickyBottomReserve }]}>
+        <Reanimated.View style={styles.heroWrap} entering={FadeIn.duration(220)}>
           {coverUri ? (
             <ExpoImage
               source={{ uri: coverUri }}
               style={styles.heroImage}
               contentFit="cover"
               contentPosition="top"
-              transition={200}
+              transition={260}
               cachePolicy="memory-disk"
               priority="high"
             />
@@ -407,30 +517,31 @@ export default function FestivalDetailScreen() {
           )}
           <LinearGradient
             pointerEvents="none"
-            colors={['transparent', 'rgba(0,0,0,0.38)', 'rgba(0,0,0,0.72)']}
-            locations={[0, 0.42, 1]}
+            colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.88)']}
+            locations={[0, 0.45, 1]}
             style={StyleSheet.absoluteFill}
           />
-          <View pointerEvents="none" style={styles.heroTextBlock}>
+          <View pointerEvents="none" style={[styles.heroTextBlock, { bottom: 20 }]}>
             <Text style={styles.heroTitle} numberOfLines={2}>
               {data.title}
             </Text>
-            {data.city || dateLineHero ? (
-              <View style={styles.heroMetaBackdrop}>
-                {data.city ? (
-                  <Text style={styles.heroMetaInBackdrop} numberOfLines={1}>
-                    {data.city}
-                  </Text>
-                ) : null}
-                {dateLineHero ? (
-                  <Text
-                    style={[styles.heroMetaInBackdrop, data.city ? styles.heroMetaInBackdropSecond : null]}
-                    numberOfLines={1}>
-                    {dateLineHero}
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
+            <View style={styles.heroChips}>
+              {data.city ? <MetaChip icon="location-outline" label={data.city} dark /> : null}
+              {dateRangeLine ? <MetaChip icon="calendar-outline" label={dateRangeLine} dark /> : null}
+              {categoryLabel ? <MetaChip icon="pricetag-outline" label={categoryLabel} dark /> : null}
+              {data.is_verified ? (
+                <View style={styles.verifyChip}>
+                  <Ionicons name="shield-checkmark" size={14} color="#A7F3D0" />
+                  <Text style={styles.verifyChipText}>Проверено</Text>
+                </View>
+              ) : null}
+              {data.is_promoted ? (
+                <View style={styles.trendChip}>
+                  <Ionicons name="flame-outline" size={14} color="#FDE68A" />
+                  <Text style={styles.trendChipText}>Актуално</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
           <HeroBookmarkButton
             filled={data.saved}
@@ -439,128 +550,185 @@ export default function FestivalDetailScreen() {
             top={bookmarkTop}
             right={bookmarkRight}
           />
-        </View>
+        </Reanimated.View>
 
-        {/* Primary CTA */}
-        <View style={styles.ctaBlock}>
-          <Pressable
-            onPress={() => onToggleSave(data)}
-            style={({ pressed }) => [
-              styles.primaryCta,
-              {
-                opacity: isSaving ? 0.88 : pressed ? 0.9 : 1,
-                transform: [
-                  { scale: pressed && !isSaving ? 0.97 : isSaving ? 0.985 : 1 },
-                ],
-              },
-            ]}>
-            {isSaving ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                {data.saved ? (
-                  <Ionicons name="bookmark" size={20} color="#FFFFFF" style={styles.ctaIcon} />
-                ) : null}
-                <Text style={styles.primaryCtaText}>{primaryLabel}</Text>
-              </>
-            )}
-          </Pressable>
-        </View>
-
-        {/* Quick info */}
-        <View style={styles.quickInfo}>
-          {data.city ? (
-            <View style={styles.quickRow}>
-              <Text style={styles.quickEmoji} accessibilityLabel="">
-                📍
-              </Text>
-              <Text style={styles.quickText}>{data.city}</Text>
-            </View>
+        <Reanimated.View
+          style={styles.quickGrid}
+          entering={FadeInDown.duration(260).delay(40)}>
+          {data.city ? <QuickTile icon="location-outline" label="Локация" value={data.city} /> : null}
+          <QuickTile
+            icon="calendar-outline"
+            label="Дата"
+            value={dateRangeLine || data.start_date}
+          />
+          {durationLine ? <QuickTile icon="hourglass-outline" label="Продължителност" value={durationLine} /> : null}
+          {organizerName ? (
+            <QuickTile icon="people-outline" label="Организатор" value={organizerName} />
           ) : null}
-          <View style={styles.quickRow}>
-            <Text style={styles.quickEmoji} accessibilityLabel="">
-              📅
-            </Text>
-            <Text style={styles.quickText}>{dateRangeLine || data.start_date}</Text>
-          </View>
-          {durationLine ? (
-            <View style={styles.quickRow}>
-              <Text style={styles.quickEmoji} accessibilityLabel="">
-                ⏱
-              </Text>
-              <Text style={styles.quickText}>{durationLine}</Text>
-            </View>
+          {categoryLabel ? (
+            <QuickTile icon="sparkles-outline" label="Категория" value={categoryLabel} />
           ) : null}
-        </View>
+        </Reanimated.View>
 
-        {/* Description */}
         {description.length > 0 ? (
-          <View style={styles.blockPad}>
+          <Reanimated.View
+            style={styles.blockPad}
+            entering={FadeInDown.duration(260).delay(110)}>
+            <Text style={styles.sectionHeading}>Описание</Text>
             <Text
               style={styles.description}
               numberOfLines={descriptionExpanded ? undefined : DESC_COLLAPSED_LINES}>
               {description}
             </Text>
-            {description.length > 320 ? (
+            {showReadMore ? (
               <Pressable onPress={toggleDescriptionExpanded} style={styles.textLinkWrap}>
                 <Text style={styles.textLink}>
-                  {descriptionExpanded ? 'По-малко' : 'Покажи повече'}
+                  {descriptionExpanded ? 'Свий' : 'Прочети още'}
                 </Text>
               </Pressable>
             ) : null}
-          </View>
+          </Reanimated.View>
         ) : null}
 
-        {/* Organizer */}
         {organizerName ? (
-          <View style={styles.blockPad}>
-            <Text style={styles.sectionLabel}>Организатор</Text>
+          <Reanimated.View
+            style={styles.blockPad}
+            entering={FadeInDown.duration(260).delay(160)}>
+            <Text style={styles.sectionHeading}>Организатор</Text>
             {hasOrganizerProfile && organizerSlug ? (
-              <Pressable
+              <PressableScale
                 onPress={() => router.push(`/organizer/${organizerSlug}`)}
-                style={({ pressed }) => [styles.organizerCard, pressed && styles.organizerCardPressed]}>
-                <Text style={styles.organizerName}>{organizerName}</Text>
-                <Ionicons name="chevron-forward" size={18} color={festivalUi.colors.secondary} />
-              </Pressable>
+                pressedScale={0.99}
+                pressedOpacity={0.9}
+                style={styles.organizerCard}>
+                <View style={styles.orgAvatar}>
+                  {data.organizer?.logo_url ? (
+                    <ExpoImage
+                      source={{ uri: data.organizer.logo_url }}
+                      style={styles.orgAvatarImg}
+                      contentFit="cover"
+                      transition={180}
+                      cachePolicy="memory-disk"
+                    />
+                  ) : (
+                    <Ionicons name="business-outline" size={22} color={festivalUi.colors.secondary} />
+                  )}
+                </View>
+                <View style={styles.orgBody}>
+                  <View style={styles.orgTitleRow}>
+                    <Text style={styles.organizerName} numberOfLines={2}>
+                      {organizerName}
+                    </Text>
+                    {data.organizer?.verified ? <VerifiedBadge compact /> : null}
+                  </View>
+                  <Text style={styles.orgSubtitle}>Организатор</Text>
+                  {tagPreview ? (
+                    <Text style={styles.orgHint} numberOfLines={1}>
+                      {tagPreview}
+                    </Text>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={festivalUi.colors.secondary} />
+              </PressableScale>
             ) : (
               <View style={styles.organizerCard}>
-                <Text style={styles.organizerName}>{organizerName}</Text>
+                <View style={styles.orgAvatar}>
+                  <Ionicons name="business-outline" size={22} color={festivalUi.colors.secondary} />
+                </View>
+                <View style={styles.orgBody}>
+                  <Text style={styles.organizerName}>{organizerName}</Text>
+                  <Text style={styles.orgSubtitle}>Организатор</Text>
+                </View>
               </View>
             )}
-          </View>
+          </Reanimated.View>
         ) : null}
 
-        {/* Gallery — skip duplicate of sole hero */}
+        {hasMapCoords ? (
+          <Reanimated.View entering={FadeInDown.duration(260).delay(200)}>
+            <FestivalMapPreview
+              latitude={lat!}
+              longitude={lng!}
+              title={data.title}
+              addressLine={mapAddressLine}
+              onOpenMaps={handleOpenMaps}
+            />
+          </Reanimated.View>
+        ) : null}
+
         {galleryStrip.length > 0 ? (
-          <View style={styles.gallerySection}>
-            <Text style={[styles.sectionLabel, styles.galleryHeading]}>Снимки</Text>
-            <ScrollView
-              horizontal
-              keyboardShouldPersistTaps="handled"
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.galleryScroll}>
-              {galleryStrip.map((uri, index) => (
+          <Reanimated.View
+            style={styles.gallerySection}
+            entering={FadeInDown.duration(260).delay(240)}>
+            <Text style={[styles.sectionHeading, styles.galleryHeading]}>Галерия</Text>
+            <View style={styles.galleryGrid}>
+              {galleryStrip.slice(0, 9).map((uri, index) => (
                 <Pressable
                   key={`${uri}-${index}`}
                   onPress={() => openGallery(uri)}
-                  style={({ pressed }) => [
-                    styles.galleryThumbPressable,
-                    index < galleryStrip.length - 1 && styles.galleryThumbSep,
-                    pressed && styles.galleryThumbPressed,
-                  ]}>
+                  style={({ pressed }) => [styles.gridThumbWrap, pressed && styles.gridThumbPressed]}>
                   <ExpoImage
                     source={{ uri }}
-                    style={styles.galleryThumbImage}
+                    style={styles.gridThumb}
                     contentFit="cover"
-                    transition={160}
+                    transition={180}
                     cachePolicy="memory-disk"
                   />
                 </Pressable>
               ))}
+            </View>
+          </Reanimated.View>
+        ) : null}
+
+        {relatedList.length > 0 ? (
+          <Reanimated.View
+            style={styles.relatedSection}
+            entering={FadeInDown.duration(260).delay(280)}>
+            <Text style={styles.sectionHeading}>Още фестивали</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.relatedScroll}
+              keyboardShouldPersistTaps="handled">
+              {relatedList.map((item) => (
+                <View key={item.festivalId} style={styles.relatedCardWrap}>
+                  <FestivalCard
+                    variant="carousel"
+                    item={item}
+                    onPressCard={() => router.push(`/festival/${item.slug}`)}
+                    onPressSave={() => {
+                      setPendingIds((prev) => new Set(prev).add(item.festivalId));
+                      toggleSavedMutation.mutate(
+                        { festivalId: item.festivalId, slug: item.slug, festival: item },
+                        {
+                          onSettled: () => {
+                            setPendingIds((prev) => {
+                              const n = new Set(prev);
+                              n.delete(item.festivalId);
+                              return n;
+                            });
+                          },
+                        },
+                      );
+                    }}
+                    saveDisabled={pendingIds.has(item.festivalId)}
+                  />
+                </View>
+              ))}
             </ScrollView>
-          </View>
+          </Reanimated.View>
         ) : null}
       </ScrollView>
+
+      <FestivalDetailStickyBar
+        saved={data.saved}
+        saveBusy={isSaving}
+        onSave={() => onToggleSave(data)}
+        onShare={handleShare}
+        onMaps={handleOpenMaps}
+        onCalendar={handleCalendar}
+        calendarDisabled={!getFestivalIcsUrl(data.slug)}
+      />
     </View>
   );
 }
@@ -594,52 +762,143 @@ const styles = StyleSheet.create({
   heroTextBlock: {
     position: 'absolute',
     left: festivalUi.screenPadding,
-    right: festivalUi.screenPadding + 58,
+    right: festivalUi.screenPadding + 54,
     bottom: 18,
   },
   heroTitle: {
     color: '#FFFFFF',
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
-    lineHeight: 28,
-    letterSpacing: -0.3,
-    textShadowColor: 'rgba(0,0,0,0.45)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
+    lineHeight: 32,
+    letterSpacing: -0.4,
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 10,
+    marginBottom: 12,
   },
-  heroMetaBackdrop: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.32)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  heroChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
     maxWidth: '100%',
   },
-  heroMetaInBackdrop: {
-    color: 'rgba(255,255,255,0.95)',
-    fontSize: 15,
-    fontWeight: '500',
+  metaChipDark: {
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(255,255,255,0.22)',
   },
-  heroMetaInBackdropSecond: {
-    marginTop: 4,
+  metaChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: festivalUi.colors.text,
+    maxWidth: 220,
   },
+  metaChipTextDark: {
+    color: 'rgba(255,255,255,0.96)',
+  },
+  verifyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(16,185,129,0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(167,243,208,0.45)',
+  },
+  verifyChipText: { fontSize: 12, fontWeight: '800', color: '#ECFDF5' },
+  trendChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(251,191,36,0.28)',
+    borderWidth: 1,
+    borderColor: 'rgba(253,230,138,0.4)',
+  },
+  trendChipText: { fontSize: 12, fontWeight: '800', color: '#FFFBEB' },
   heroBookmark: {
     position: 'absolute',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   heroBookmarkSaving: {
     opacity: 0.85,
   },
   heroBookmarkPressed: {
     opacity: 0.88,
+  },
+  quickGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: festivalUi.screenPadding - 4,
+    paddingTop: 16,
+    gap: 10,
+  },
+  quickTile: {
+    width: '47%',
+    flexGrow: 1,
+    minWidth: '42%',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FAFAFA',
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  quickTileIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  quickTileLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: festivalUi.colors.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.45,
+    marginBottom: 4,
+  },
+  quickTileValue: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '700',
+    color: festivalUi.colors.text,
+  },
+  sectionHeading: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: festivalUi.colors.text,
+    marginBottom: 10,
   },
   lightboxRoot: {
     flex: 1,
@@ -673,66 +932,13 @@ const styles = StyleSheet.create({
     height: '78%',
     maxHeight: 640,
   },
-  ctaBlock: {
-    paddingHorizontal: festivalUi.screenPadding,
-    paddingTop: 18,
-    paddingBottom: 8,
-  },
-  primaryCta: {
-    height: CTA_H,
-    borderRadius: 16,
-    backgroundColor: '#111827',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: '#111827',
-  },
-  ctaIcon: {
-    marginRight: 8,
-  },
-  primaryCtaText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  quickInfo: {
-    paddingHorizontal: festivalUi.screenPadding,
-    paddingTop: 10,
-    paddingBottom: 8,
-    gap: 12,
-  },
-  quickRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  quickEmoji: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  quickText: {
-    flex: 1,
-    fontSize: 16,
-    lineHeight: 22,
-    color: festivalUi.colors.text,
-    fontWeight: '500',
-  },
   blockPad: {
     paddingHorizontal: festivalUi.screenPadding,
-    paddingTop: 16,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: festivalUi.colors.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
+    paddingTop: 22,
   },
   description: {
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 26,
     color: '#374151',
   },
   textLinkWrap: {
@@ -741,58 +947,103 @@ const styles = StyleSheet.create({
   },
   textLink: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#4F46E5',
   },
   organizerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
     paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 16,
+    paddingHorizontal: 14,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     backgroundColor: '#FAFAFA',
+    gap: 12,
+  },
+  orgAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  orgAvatarImg: { width: '100%', height: '100%' },
+  orgBody: { flex: 1, minWidth: 0 },
+  orgTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   organizerName: {
     fontSize: 17,
-    fontWeight: '600',
+    fontWeight: '800',
     color: festivalUi.colors.text,
-    flex: 1,
+    flexShrink: 1,
   },
-  organizerCardPressed: {
-    opacity: 0.7,
+  orgSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '700',
+    color: festivalUi.colors.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  orgHint: {
+    marginTop: 4,
+    fontSize: 13,
+    color: festivalUi.colors.muted,
+    fontWeight: '600',
   },
   gallerySection: {
-    marginTop: 12,
-    paddingBottom: 28,
+    marginTop: 8,
+    paddingBottom: 8,
   },
   galleryHeading: {
     paddingHorizontal: festivalUi.screenPadding,
   },
-  galleryScroll: {
+  galleryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: festivalUi.screenPadding,
-    paddingTop: 4,
-    gap: 12,
+    gap: 8,
+    marginTop: 4,
   },
-  galleryThumbPressable: {
-    borderRadius: 16,
+  gridThumbWrap: {
+    width: '31%',
+    flexGrow: 1,
+    aspectRatio: 1,
+    minWidth: '30%',
+    borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: '#F3F4F6',
   },
-  galleryThumbImage: {
-    width: 168,
-    height: GALLERY_H,
+  gridThumb: {
+    width: '100%',
+    height: '100%',
   },
-  galleryThumbSep: {
-    marginRight: 12,
-  },
-  galleryThumbPressed: {
+  gridThumbPressed: {
     opacity: 0.88,
   },
+  relatedSection: {
+    marginTop: 8,
+    paddingBottom: 24,
+  },
+  relatedScroll: {
+    paddingHorizontal: festivalUi.screenPadding,
+    gap: 12,
+    paddingTop: 4,
+  },
+  relatedCardWrap: {
+    width: 280,
+  },
   scrollContentBottom: {
-    paddingBottom: 40,
+    paddingBottom: 32,
   },
   bodyText: {
     fontSize: 17,
@@ -801,24 +1052,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
   },
-  heroSkeleton: {
-    width: '100%',
-    backgroundColor: '#E5E7EB',
-  },
-  skeletonLine: {
-    height: 14,
-    width: '100%',
-    borderRadius: 6,
-    backgroundColor: '#E5E7EB',
+  skeletonLineSpace: {
     marginBottom: 10,
-  },
-  skeletonLineShort: {
-    width: '72%',
-  },
-  ctaSkeleton: {
-    marginTop: 8,
-    height: CTA_H,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
   },
 });

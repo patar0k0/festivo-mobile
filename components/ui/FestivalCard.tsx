@@ -1,10 +1,12 @@
-import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRef } from 'react';
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
+import { PressableScale } from '@/components/ui/PressableScale';
 import type { FestivalListItem } from '@/lib/api/festivals';
 import { getRelativeDateLabel, getStartsInLabelBg } from '@/lib/festival/relativeDate';
 
@@ -109,15 +111,23 @@ export function FestivalCard({
       <View style={styles.compactSavedCard}>
         {item.saved ? (
           <View pointerEvents="none" style={styles.compactCardBookmark}>
-            <Ionicons name="bookmark" size={20} color={colors.text} />
+            <AnimatedBookmark filled size={20} color={colors.text} />
           </View>
         ) : null}
-        <Pressable
+        <PressableScale
           onPress={onPressCard}
-          style={({ pressed }) => [styles.compactSavedRow, pressed && styles.cardPressed]}>
+          pressedScale={0.99}
+          pressedOpacity={0.94}
+          style={styles.compactSavedRow}>
           <View style={styles.compactSavedThumbWrap}>
             {imageUrl ? (
-              <Image source={{ uri: imageUrl }} style={styles.compactSavedThumb} />
+              <ExpoImage
+                source={{ uri: imageUrl }}
+                style={styles.compactSavedThumb}
+                contentFit="cover"
+                transition={180}
+                cachePolicy="memory-disk"
+              />
             ) : (
               <View style={styles.compactSavedThumbPlaceholder}>
                 <Text style={styles.compactSavedThumbEmoji}>🎉</Text>
@@ -138,7 +148,7 @@ export function FestivalCard({
               {startsInText}
             </Text>
           </View>
-        </Pressable>
+        </PressableScale>
         {item.saved ? (
           <View style={styles.savedCompactStack}>
             <View style={styles.savedBadgeRowCompact}>
@@ -167,15 +177,22 @@ export function FestivalCard({
 
   if (imageUrl) {
     return (
-      <Pressable
+      <PressableScale
         onPress={onPressCard}
-        style={({ pressed }) => [
+        pressedScale={0.97}
+        pressedOpacity={0.95}
+        style={[
           styles.cardOuter,
           styles.heroCard,
           variant === 'carousel' && styles.cardCarousel,
-          pressed && styles.cardPressed,
         ]}>
-        <Image source={{ uri: imageUrl }} style={styles.heroImage} />
+        <ExpoImage
+          source={{ uri: imageUrl }}
+          style={styles.heroImage}
+          contentFit="cover"
+          transition={220}
+          cachePolicy="memory-disk"
+        />
         <LinearGradient
           colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.28)', 'rgba(0,0,0,0.72)']}
           locations={[0, 0.45, 1]}
@@ -199,7 +216,7 @@ export function FestivalCard({
           {item.saved ? (
             <View style={styles.heroSavedStack}>
               <View style={styles.savedBadgeRowLight}>
-                <Ionicons name="bookmark" size={18} color="#FFFFFF" />
+                <AnimatedBookmark filled size={18} color="#FFFFFF" />
                 <Text style={styles.savedBadgeLabelLight}>Запазено</Text>
               </View>
               <FestivalSaveButton
@@ -221,7 +238,7 @@ export function FestivalCard({
             />
           )}
         </View>
-      </Pressable>
+      </PressableScale>
     );
   }
 
@@ -235,7 +252,11 @@ export function FestivalCard({
         colors={['rgba(255,255,255,0.12)', 'rgba(0,0,0,0.25)']}
         style={StyleSheet.absoluteFill}
       />
-      <Pressable onPress={onPressCard} style={({ pressed }) => [styles.cardInner, styles.noImageInner, pressed && styles.cardPressed]}>
+      <PressableScale
+        onPress={onPressCard}
+        pressedScale={0.985}
+        pressedOpacity={0.94}
+        style={[styles.cardInner, styles.noImageInner]}>
         <Text style={styles.noImageTitle} numberOfLines={2}>
           {item.title}
         </Text>
@@ -248,11 +269,11 @@ export function FestivalCard({
         <Text style={styles.noImageStarts} numberOfLines={1}>
           {startsInText}
         </Text>
-      </Pressable>
+      </PressableScale>
       {item.saved ? (
         <View style={styles.savedPlainStack}>
           <View style={styles.savedBadgeRowDark}>
-            <Ionicons name="bookmark" size={18} color="#FFFFFF" />
+            <AnimatedBookmark filled size={18} color="#FFFFFF" />
             <Text style={styles.savedBadgeLabelOnGradient}>Запазено</Text>
           </View>
           <FestivalSaveButton label={saveLabel} onPress={handleSavePress} disabled={saveDisabled} loading={saveDisabled} />
@@ -299,8 +320,18 @@ export function FeaturedFestivalCard({
   }
 
   return (
-    <Pressable onPress={onPressCard} style={({ pressed }) => [styles.cardOuter, styles.featuredCard, pressed && styles.cardPressed]}>
-      <Image source={{ uri: imageUrl }} style={styles.featuredImage} />
+    <PressableScale
+      onPress={onPressCard}
+      pressedScale={0.97}
+      pressedOpacity={0.95}
+      style={[styles.cardOuter, styles.featuredCard]}>
+      <ExpoImage
+        source={{ uri: imageUrl }}
+        style={styles.featuredImage}
+        contentFit="cover"
+        transition={240}
+        cachePolicy="memory-disk"
+      />
       <LinearGradient
         colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.42)', 'rgba(0,0,0,0.86)']}
         locations={[0, 0.45, 1]}
@@ -324,7 +355,7 @@ export function FeaturedFestivalCard({
         {item.saved ? (
           <View style={styles.featuredSavedStack}>
             <View style={styles.savedBadgeRowLight}>
-              <Ionicons name="bookmark" size={18} color="#FFFFFF" />
+              <AnimatedBookmark filled size={18} color="#FFFFFF" />
               <Text style={styles.savedBadgeLabelLight}>Запазено</Text>
             </View>
             <FestivalSaveButton
@@ -348,7 +379,7 @@ export function FeaturedFestivalCard({
           />
         )}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
