@@ -1,0 +1,14 @@
+Festivo — mobile app (Expo / React Native / expo-router)
+
+Context
+- Bulgaria-focused festivals catalog; consumes read-only JSON from the web backend (e.g. GET /api/mobile/festivals, GET /api/mobile/festivals/[slug]) via lib/api/client.
+- Pair repo: festivo-web (API + admin). Do not change web APIs unless the task explicitly asks.
+
+Conventions
+- Match existing patterns in components/screens/HomeScreen.tsx and app/(tabs)/saved.tsx: TanStack Query, queryKey shapes, optimistic save via useToggleSavedMutation, pendingIds Set + spinner on save, Haptics on save taps.
+- Festival detail cache key: ["festival", slug] — align with Home prefetch (getFestivalBySlug).
+- UI copy: Bulgarian for user-visible strings unless the screen is intentionally English.
+- Prefer expo-image (ExpoImage), existing festivalUi from components/ui/FestivalCard.tsx, small focused diffs.
+
+Before coding
+- Read only files relevant to the task; reuse helpers (e.g. lib/festival/relativeDate.ts).
