@@ -4,7 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+<<<<<<< HEAD
 import { useLocalSearchParams, useRouter } from 'expo-router';
+=======
+import { useLocalSearchParams } from 'expo-router';
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -166,7 +170,10 @@ function GalleryLightbox({
 export default function FestivalDetailScreen() {
   const { slug: slugParam } = useLocalSearchParams<{ slug: string }>();
   const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam;
+<<<<<<< HEAD
   const router = useRouter();
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
   const insets = useSafeAreaInsets();
   const toggleSavedMutation = useToggleSavedMutation();
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
@@ -372,9 +379,12 @@ export default function FestivalDetailScreen() {
   const description = (data.description ?? '').trim();
   const isSaving = pendingIds.has(data.festivalId);
   const primaryLabel = data.saved ? 'Запазено' : 'Запази събитието';
+<<<<<<< HEAD
   const organizerSlug = data.organizer?.slug?.trim();
   const organizerName = data.organizer?.name?.trim() || data.organizer_name?.trim() || '';
   const hasOrganizerProfile = Boolean(organizerSlug);
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
 
   return (
     <View style={styles.root}>
@@ -511,6 +521,7 @@ export default function FestivalDetailScreen() {
           </View>
         ) : null}
 
+<<<<<<< HEAD
         {/* Organizer */}
         {organizerName ? (
           <View style={styles.blockPad}>
@@ -527,6 +538,15 @@ export default function FestivalDetailScreen() {
                 <Text style={styles.organizerName}>{organizerName}</Text>
               </View>
             )}
+=======
+        {/* Organizer — informational only */}
+        {data.organizer_name ? (
+          <View style={styles.blockPad}>
+            <Text style={styles.sectionLabel}>Организатор</Text>
+            <View style={styles.organizerCard}>
+              <Text style={styles.organizerName}>{data.organizer_name}</Text>
+            </View>
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
           </View>
         ) : null}
 
@@ -761,9 +781,12 @@ const styles = StyleSheet.create({
     color: festivalUi.colors.text,
     flex: 1,
   },
+<<<<<<< HEAD
   organizerCardPressed: {
     opacity: 0.7,
   },
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
   gallerySection: {
     marginTop: 12,
     paddingBottom: 28,

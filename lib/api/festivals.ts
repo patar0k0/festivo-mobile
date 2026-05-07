@@ -47,10 +47,13 @@ export type FestivalDetail = {
   /** Gallery URLs (detail payload `images[]`) */
   gallery_urls?: string[];
   organizer_name?: string;
+<<<<<<< HEAD
   organizer?: {
     slug?: string;
     name?: string;
   };
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
   start_time?: string | null;
   end_time?: string | null;
 };
@@ -192,8 +195,11 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
   const org = asRecord(o.organizer);
   const organizer_name =
     org?.name != null && String(org.name).trim() ? String(org.name) : undefined;
+<<<<<<< HEAD
   const organizer_slug =
     org?.slug != null && String(org.slug).trim() ? String(org.slug).trim() : undefined;
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
 
   return {
     festivalId,
@@ -207,6 +213,7 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
     image_url,
     gallery_urls: gallery_urls.length > 0 ? gallery_urls : undefined,
     organizer_name,
+<<<<<<< HEAD
     organizer:
       organizer_slug || organizer_name
         ? {
@@ -214,6 +221,8 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
             name: organizer_name,
           }
         : undefined,
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
     start_time: start_time?.trim() ? start_time : null,
     end_time: end_time?.trim() ? end_time : null,
   };

@@ -56,7 +56,10 @@ function RootStack() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="festival/[slug]" options={{ headerShown: false }} />
+<<<<<<< HEAD
         <Stack.Screen name="organizer/[slug]" options={{ headerShown: false }} />
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
         <Stack.Screen name="search" options={{ headerShown: false }} />
         <Stack.Screen
           name="profile-notifications"

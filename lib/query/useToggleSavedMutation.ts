@@ -71,6 +71,7 @@ function listQueryFilterAll() {
   return { predicate: isFestivalListQuery, type: 'all' as const };
 }
 
+<<<<<<< HEAD
 function toLoggableQueryKey(queryKey: QueryKey): string {
   try {
     return JSON.stringify(queryKey);
@@ -100,6 +101,8 @@ function logPatchedQuery(
   });
 }
 
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
 /**
  * Secondary pass: update rows by normalized slug (covers festivalId mismatches between list rows and toggle payload).
  */
@@ -107,6 +110,7 @@ function patchAllFestivalListsBySlug(queryClient: QueryClient, slug: string | un
   const slugTrim = slug?.trim();
   if (!slugTrim) return;
   const filter = listQueryFilterAll();
+<<<<<<< HEAD
   const refBySlug: FestivalSavedRef = { festivalId: '', slug: slugTrim };
   for (const [queryKey, data] of queryClient.getQueriesData(filter)) {
     const next = updateFestivalSavedStateInCache(data, refBySlug, saved);
@@ -118,6 +122,24 @@ function patchAllFestivalListsBySlug(queryClient: QueryClient, slug: string | un
     if (data === undefined) continue;
     const next = updateFestivalSavedStateInCache(data, refBySlug, saved);
     if (next === data) continue;
+=======
+  for (const [queryKey, data] of queryClient.getQueriesData(filter)) {
+    if (!Array.isArray(data)) continue;
+    const list = data as FestivalListItem[];
+    if (!list.some((i) => String(i.slug ?? '').trim() === slugTrim)) continue;
+    const next = list.map((i) =>
+      String(i.slug ?? '').trim() === slugTrim ? { ...i, saved } : i,
+    );
+    queryClient.setQueryData(queryKey, next);
+  }
+  for (const key of HOME_FESTIVAL_LIST_KEYS) {
+    const data = queryClient.getQueryData<FestivalListItem[]>(key);
+    if (!Array.isArray(data)) continue;
+    if (!data.some((i) => String(i.slug ?? '').trim() === slugTrim)) continue;
+    const next = data.map((i) =>
+      String(i.slug ?? '').trim() === slugTrim ? { ...i, saved } : i,
+    );
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
     queryClient.setQueryData(key, next);
   }
 }
@@ -129,14 +151,20 @@ function syncSavedInAllCaches(queryClient: QueryClient, input: ToggleSavedInput,
   for (const [queryKey, data] of queryClient.getQueriesData(filter)) {
     const next = updateFestivalSavedStateInCache(data, ref, saved);
     queryClient.setQueryData(queryKey, next);
+<<<<<<< HEAD
     logPatchedQuery(queryKey, data, next, ref, 'success');
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
   }
   for (const key of HOME_FESTIVAL_LIST_KEYS) {
     const data = queryClient.getQueryData(key);
     if (data === undefined) continue;
     const next = updateFestivalSavedStateInCache(data, ref, saved);
     queryClient.setQueryData(key, next);
+<<<<<<< HEAD
     logPatchedQuery(key, data, next, ref, 'success');
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
   }
   patchAllFestivalListsBySlug(queryClient, ref.slug, saved);
   const slug = ref.slug;
@@ -215,14 +243,20 @@ export function useToggleSavedMutation() {
       for (const { queryKey, data } of festivalListSnapshots) {
         const next = updateFestivalSavedStateInCache(data, ref, nextSavedState);
         queryClient.setQueryData(queryKey, next);
+<<<<<<< HEAD
         logPatchedQuery(queryKey, data, next, ref, 'optimistic');
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
       }
       for (const key of HOME_FESTIVAL_LIST_KEYS) {
         const data = queryClient.getQueryData(key);
         if (data === undefined) continue;
         const next = updateFestivalSavedStateInCache(data, ref, nextSavedState);
         queryClient.setQueryData(key, next);
+<<<<<<< HEAD
         logPatchedQuery(key, data, next, ref, 'optimistic');
+=======
+>>>>>>> 4d96467545513c65fa9f00fbf4149b41657b44b2
       }
       patchAllFestivalListsBySlug(queryClient, ref.slug, nextSavedState);
 
