@@ -25,7 +25,9 @@ import { Skeleton, skeletonRadii, skeletonRhythm } from '@/components/ui/Skeleto
 import { festivalUi } from '@/components/ui/FestivalCard';
 import type { FestivalListItem } from '@/lib/api/festivals';
 import { getFestivalBySlug, getFestivals } from '@/lib/api/festivals';
+import { getPersonalizedSections } from '@/lib/api/recommendations';
 import { formatDateRangeRelative, getRelativeDateLabel } from '@/lib/festival/relativeDate';
+import { getRecentlyViewedFestivals } from '@/lib/personalization/recentlyViewed';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 import { queryClient } from '@/lib/queryClient';
 
@@ -34,7 +36,7 @@ const COLORS = festivalUi.colors;
 /** Horizontal gap between trending cards; must match `trendingItemSep` for accurate `getItemLayout`. */
 const TRENDING_CARD_SEPARATOR_WIDTH = 14;
 
-type SectionKey = 'week' | 'popular';
+type SectionKey = 'week' | 'popular' | 'continue';
 
 type HomeSection = {
   key: SectionKey;
@@ -414,6 +416,18 @@ export default function HomeScreen() {
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });
+  const personalizedQuery = useQuery({
+    queryKey: ['feed', 'personalized'],
+    queryFn: () => getPersonalizedSections(1),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+  });
+  const recentlyViewedQuery = useQuery({
+    queryKey: ['recently-viewed'],
+    queryFn: () => getRecentlyViewedFestivals(8),
+    staleTime: 1000 * 30,
+    gcTime: 1000 * 60 * 15,
+  });
 
   const trending = trendingQuery.data ?? [];
   const week = weekQuery.data ?? [];
@@ -434,6 +448,18 @@ export default function HomeScreen() {
   const showTrendingContent = !trendingQuery.isError && trending.length > 0;
 
   const sections: HomeSection[] = [];
+  const continueExploring = (recentlyViewedQuery.data ?? []).slice(0, 6);
+  if (continueExploring.length > 0) {
+    sections.push({ key: 'continue', title: '🧭 Continue exploring', data: continueExploring });
+  }
+  const personalizedSections = personalizedQuery.data ?? [];
+  for (const section of personalizedSections) {
+    sections.push({
+      key: section.key === 'trending' ? 'popular' : 'week',
+      title: section.title,
+      data: section.items,
+    });
+  }
   if (!weekQuery.isLoading && weekFiltered.length > 0) {
     sections.push({ key: 'week', title: '📅 Тази седмица', data: weekFiltered });
   }
@@ -445,7 +471,9 @@ export default function HomeScreen() {
     void trendingQuery.refetch();
     void weekQuery.refetch();
     void popularQuery.refetch();
-  }, [trendingQuery, weekQuery, popularQuery]);
+    void personalizedQuery.refetch();
+    void recentlyViewedQuery.refetch();
+  }, [trendingQuery, weekQuery, popularQuery, personalizedQuery, recentlyViewedQuery]);
 
   const openFestival = useCallback(
     (item: FestivalListItem) => {
@@ -509,7 +537,7 @@ export default function HomeScreen() {
 
   const renderSectionItem = useCallback(
     ({ item, section }: SectionListRenderItemInfo<FestivalListItem, HomeSection>) =>
-      section.key === 'week' ? (
+      section.key === 'week' || section.key === 'continue' ? (
         <CompactWeekCard
           item={item}
           onPressCard={() => openFestival(item)}
@@ -528,7 +556,11 @@ export default function HomeScreen() {
   );
 
   const refreshing =
-    trendingQuery.isRefetching || weekQuery.isRefetching || popularQuery.isRefetching;
+    trendingQuery.isRefetching ||
+    weekQuery.isRefetching ||
+    popularQuery.isRefetching ||
+    personalizedQuery.isRefetching ||
+    recentlyViewedQuery.isRefetching;
 
   const weekHeaderBlockInListHeader =
     (weekQuery.isLoading && week.length === 0) || weekQuery.isError;

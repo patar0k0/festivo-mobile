@@ -34,9 +34,11 @@ import { Skeleton, skeletonRadii, skeletonRhythm } from '@/components/ui/Skeleto
 import { FestivalCard, festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
 import type { FestivalDetail, FestivalListItem } from '@/lib/api/festivals';
 import { getFestival, getFestivals } from '@/lib/api/festivals';
+import { trackEvent } from '@/lib/analytics/track';
 import { formatDateRangeRelative } from '@/lib/festival/relativeDate';
 import { buildLocationQuery, openInMaps } from '@/lib/map/openInMaps';
 import { isValidCoordinatePair, looksLikeBulgaria } from '@/lib/map/coordinates';
+import { trackRecentlyViewedFestival } from '@/lib/personalization/recentlyViewed';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 import { getFestivalIcsUrl, getFestivalPublicUrl } from '@/lib/site';
 
@@ -246,6 +248,31 @@ export default function FestivalDetailScreen() {
     if (!relatedRaw || !data) return [];
     return relatedRaw.filter((x) => x.slug !== data.slug).slice(0, 12);
   }, [relatedRaw, data]);
+
+  useEffect(() => {
+    if (!data) return;
+    const viewedItem: FestivalListItem = {
+      festivalId: data.festivalId,
+      slug: data.slug,
+      title: data.title,
+      city: data.city,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      image_url: data.image_url ?? null,
+      saved: data.saved,
+      organizer_name: data.organizer_name,
+      category: data.category,
+      is_verified: data.is_verified,
+      is_promoted: data.is_promoted,
+    };
+    void trackRecentlyViewedFestival(viewedItem);
+    void trackEvent({
+      event: 'festival_view',
+      festival_id: data.festivalId,
+      slug: data.slug,
+      source: 'mobile_detail',
+    });
+  }, [data]);
 
   const stickyBottomReserve = FESTIVAL_STICKY_BAR_OFFSET + Math.max(insets.bottom, 10) + SCROLL_BOTTOM_EXTRA;
 

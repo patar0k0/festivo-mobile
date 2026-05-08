@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth/useAuth';
 const SETTINGS_ROWS: { key: string; label: string }[] = [
   { key: 'inbox', label: 'Входящи известия' },
   { key: 'notifications', label: 'Известия' },
+  { key: 'onboarding', label: 'Персонализация' },
   { key: 'about', label: 'За приложението' },
   { key: 'privacy', label: 'Политика за поверителност' },
   { key: 'version', label: 'Версия 1.0.0' },
@@ -17,6 +18,7 @@ const SETTINGS_ROWS: { key: string; label: string }[] = [
 const SETTINGS_ROUTE_BY_KEY: Record<string, string> = {
   inbox: '/profile-inbox',
   notifications: '/profile-notifications',
+  onboarding: '/onboarding',
   about: '/profile-about',
   privacy: '/profile-privacy',
 };

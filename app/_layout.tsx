@@ -10,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotificationResponseNavigation } from '@/hooks/use-notification-response-navigation';
 import { AuthProvider, useAuth } from '@/lib/auth/useAuth';
+import { getOnboardingDraft } from '@/lib/personalization/onboarding';
 import { queryClient } from '@/lib/queryClient';
 
 SplashScreen.preventAutoHideAsync();
@@ -25,15 +26,32 @@ function AuthNavigationSync() {
 
   useEffect(() => {
     if (loading) return;
-
+    let cancelled = false;
     const root = segments[0];
     const inAuthGroup = root === '(auth)';
+    const inOnboarding = root === 'onboarding';
 
-    if (!user && !inAuthGroup) {
-      router.replace('/(auth)/login');
-    } else if (user && inAuthGroup) {
-      router.replace('/(tabs)');
-    }
+    const sync = async () => {
+      if (!user && !inAuthGroup) {
+        router.replace('/(auth)/login');
+        return;
+      }
+      if (!user) return;
+      const draft = await getOnboardingDraft();
+      if (cancelled) return;
+      if (!draft.completed && !inOnboarding) {
+        router.replace('/onboarding');
+        return;
+      }
+      if (draft.completed && inAuthGroup) {
+        router.replace('/(tabs)');
+      }
+    };
+
+    void sync();
+    return () => {
+      cancelled = true;
+    };
   }, [user, loading, segments, router]);
 
   useEffect(() => {
@@ -72,6 +90,7 @@ function RootStack() {
           }}
         />
         <Stack.Screen name="search" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen
           name="notification-fallback"
           options={{
