@@ -8,6 +8,7 @@ import { isExpoGo } from '@/lib/push/isExpoGo';
 import { loadNotifications } from '@/lib/push/loadNotifications';
 
 type PushPlatform = 'ios' | 'android';
+export type PushPermissionState = 'granted' | 'denied' | 'undetermined' | 'unavailable';
 
 function resolveEasProjectId(): string | undefined {
   const extra = Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined;
@@ -71,4 +72,22 @@ export async function registerPush(): Promise<void> {
   } catch (e) {
     console.error('[registerPush]', e);
   }
+}
+
+export async function getPushPermissionState(): Promise<PushPermissionState> {
+  if (isExpoGo) return 'unavailable';
+  const Notifications = await loadNotifications();
+  if (!Notifications) return 'unavailable';
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status === 'granted' || status === 'denied' || status === 'undetermined') return status;
+  return 'unavailable';
+}
+
+export async function requestPushPermission(): Promise<PushPermissionState> {
+  if (isExpoGo) return 'unavailable';
+  const Notifications = await loadNotifications();
+  if (!Notifications) return 'unavailable';
+  const { status } = await Notifications.requestPermissionsAsync();
+  if (status === 'granted' || status === 'denied' || status === 'undetermined') return status;
+  return 'unavailable';
 }

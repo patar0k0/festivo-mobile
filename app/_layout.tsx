@@ -73,6 +73,22 @@ function RootStack() {
         />
         <Stack.Screen name="search" options={{ headerShown: false }} />
         <Stack.Screen
+          name="notification-fallback"
+          options={{
+            title: 'Проблем с известие',
+            headerShown: true,
+            headerBackTitle: 'Назад',
+          }}
+        />
+        <Stack.Screen
+          name="profile-inbox"
+          options={{
+            title: 'Входящи известия',
+            headerShown: true,
+            headerBackTitle: 'Назад',
+          }}
+        />
+        <Stack.Screen
           name="profile-notifications"
           options={{
             title: 'Известия',
