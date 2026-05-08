@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { ListRenderItemInfo, SectionListRenderItemInfo, StyleProp, ViewStyle } from 'react-native';
 import {
     ActivityIndicator,
@@ -25,7 +25,7 @@ import { Skeleton, skeletonRadii, skeletonRhythm } from '@/components/ui/Skeleto
 import { festivalUi } from '@/components/ui/FestivalCard';
 import type { FestivalListItem } from '@/lib/api/festivals';
 import { getFestivalBySlug, getFestivals } from '@/lib/api/festivals';
-import { getPersonalizedSections } from '@/lib/api/recommendations';
+import { getPersonalizedSections, type PersonalizedSection } from '@/lib/api/recommendations';
 import { formatDateRangeRelative, getRelativeDateLabel } from '@/lib/festival/relativeDate';
 import { getRecentlyViewedFestivals, type RecentlyViewedFestival } from '@/lib/personalization/recentlyViewed';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
@@ -37,12 +37,48 @@ const COLORS = festivalUi.colors;
 const TRENDING_CARD_SEPARATOR_WIDTH = 14;
 
 type SectionKey = 'week' | 'popular' | 'continue';
+type SectionVariant = 'continue' | 'week' | 'popular' | 'following';
 
 type HomeSection = {
   key: SectionKey;
+  source: 'recently_viewed' | PersonalizedSection['key'] | 'week' | 'popular';
+  variant: SectionVariant;
   title: string;
   data: FestivalListItem[];
 };
+
+const IMAGE_PLACEHOLDER_HASH = 'L5H2EC=PM+yV0g-mq.wG9c010J}I';
+const SECTION_ROTATION_ORDERS: ('continue' | 'week' | 'popular')[][] = [
+  ['continue', 'week', 'popular'],
+  ['continue', 'popular', 'week'],
+  ['week', 'continue', 'popular'],
+  ['popular', 'continue', 'week'],
+];
+
+function pickSectionTitle(section: HomeSection): string {
+  const firstItem = section.data[0];
+  const city = firstItem?.city?.trim();
+  switch (section.source) {
+    case 'recently_viewed':
+      return 'Продължи оттук';
+    case 'near_you':
+      return city ? `Популярно около ${city}` : 'Популярно около теб';
+    case 'this_weekend':
+      return 'За този уикенд';
+    case 'from_followed_organizers':
+      return 'Ново от следвани организатори';
+    case 'for_you':
+      return 'Може да ти хареса';
+    case 'trending':
+      return 'Набира скорост';
+    case 'week':
+      return 'Тази седмица';
+    case 'popular':
+      return 'Най-запазвани';
+    default:
+      return section.title;
+  }
+}
 
 function formatViewedAgo(viewedAt?: string): string {
   if (!viewedAt) return 'Наскоро';
@@ -193,9 +229,10 @@ function TrendingCard({
             source={{ uri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            transition={220}
+            transition={260}
             cachePolicy="memory-disk"
             priority="high"
+            placeholder={IMAGE_PLACEHOLDER_HASH}
             placeholderContentFit="cover"
           />
         ) : (
@@ -263,9 +300,11 @@ function CompactWeekCard({
             source={{ uri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            transition={180}
+            transition={220}
             cachePolicy="memory-disk"
-            priority="high"
+            priority="normal"
+            placeholder={IMAGE_PLACEHOLDER_HASH}
+            placeholderContentFit="cover"
           />
         ) : (
           <LinearGradient
@@ -309,11 +348,13 @@ function CompactWeekCard({
 
 function ContinueCard({
   item,
+  title,
   onPressCard,
   onPressSave,
   saveDisabled,
 }: {
   item: RecentlyViewedFestival;
+  title: string;
   onPressCard: () => void;
   onPressSave: () => void;
   saveDisabled?: boolean;
@@ -329,9 +370,11 @@ function ContinueCard({
             source={{ uri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            transition={180}
+            transition={240}
             cachePolicy="memory-disk"
-            priority="high"
+            priority="normal"
+            placeholder={IMAGE_PLACEHOLDER_HASH}
+            placeholderContentFit="cover"
           />
         ) : (
           <LinearGradient pointerEvents="none" colors={['#E85D5D', '#B91C1C']} style={StyleSheet.absoluteFill}>
@@ -340,7 +383,7 @@ function ContinueCard({
         )}
       </View>
       <View style={styles.continueBody}>
-        <Text style={styles.continueHint}>Продължи оттук</Text>
+        <Text style={styles.continueHint}>{title}</Text>
         <Text style={styles.continueTitle} numberOfLines={2}>
           {item.title}
         </Text>
@@ -350,6 +393,10 @@ function ContinueCard({
         <Text style={styles.continueViewedAt} numberOfLines={1}>
           {formatViewedAgo(item.viewed_at)}
         </Text>
+        <View style={styles.continueProgressChip}>
+          <Ionicons name="play-forward-outline" size={10} color="#4F46E5" />
+          <Text style={styles.continueProgressText}>Продължи</Text>
+        </View>
       </View>
       <Pressable
         disabled={saveDisabled}
@@ -401,9 +448,11 @@ function PopularCard({
               source={{ uri }}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
-              transition={180}
+              transition={210}
               cachePolicy="memory-disk"
-              priority="high"
+              priority="normal"
+              placeholder={IMAGE_PLACEHOLDER_HASH}
+              placeholderContentFit="cover"
             />
           ) : (
             <LinearGradient
@@ -505,9 +554,13 @@ export default function HomeScreen() {
     gcTime: 1000 * 60 * 15,
   });
 
-  const trending = trendingQuery.data ?? [];
-  const week = weekQuery.data ?? [];
-  const popular = popularQuery.data ?? [];
+  const trending = useMemo(() => trendingQuery.data ?? [], [trendingQuery.data]);
+  const week = useMemo(() => weekQuery.data ?? [], [weekQuery.data]);
+  const popular = useMemo(() => popularQuery.data ?? [], [popularQuery.data]);
+  const personalizedSections = useMemo(
+    () => personalizedQuery.data ?? [],
+    [personalizedQuery.data],
+  );
 
   const trendingIds = new Set(trending.map((i) => i.festivalId));
 
@@ -523,25 +576,90 @@ export default function HomeScreen() {
     trendingQuery.isError || trending.length > 0 || trendingQuery.isLoading;
   const showTrendingContent = !trendingQuery.isError && trending.length > 0;
 
-  const sections: HomeSection[] = [];
-  const continueExploring = (recentlyViewedQuery.data ?? []).slice(0, 6);
-  if (continueExploring.length > 0) {
-    sections.push({ key: 'continue', title: '🧭 Продължи да разглеждаш', data: continueExploring });
+  const continueExploring = useMemo(
+    () => (recentlyViewedQuery.data ?? []).slice(0, 6),
+    [recentlyViewedQuery.data],
+  );
+  const hasFollowedItems = useMemo(
+    () => personalizedSections.some((section) => section.key === 'from_followed_organizers'),
+    [personalizedSections],
+  );
+  const trendingTitle = hasFollowedItems ? 'В тренд за теб' : 'Популярни сега';
+  const weekFallbackTitle = personalizedSections.some((section) => section.key === 'this_weekend')
+    ? 'За този уикенд'
+    : 'Тази седмица';
+  const popularFallbackTitle = personalizedSections.some((section) => section.key === 'near_you')
+    ? 'Популярно около теб'
+    : 'Най-запазвани';
+
+  const rotationSeedRef = useRef<number | null>(null);
+  if (rotationSeedRef.current == null) {
+    const daySeed = new Date().getDate();
+    const followsSeed = hasFollowedItems ? 1 : 0;
+    const viewedSeed = Math.min(continueExploring.length, 3);
+    rotationSeedRef.current = (daySeed + followsSeed + viewedSeed) % SECTION_ROTATION_ORDERS.length;
   }
-  const personalizedSections = personalizedQuery.data ?? [];
-  for (const section of personalizedSections) {
-    sections.push({
-      key: section.key === 'trending' ? 'popular' : 'week',
-      title: section.title,
-      data: section.items,
-    });
-  }
-  if (!weekQuery.isLoading && weekFiltered.length > 0) {
-    sections.push({ key: 'week', title: '📅 Тази седмица', data: weekFiltered });
-  }
-  if (!popularQuery.isLoading && popular.length > 0) {
-    sections.push({ key: 'popular', title: '⭐ Най-запазвани', data: popular });
-  }
+  const sessionOrder = SECTION_ROTATION_ORDERS[rotationSeedRef.current];
+
+  const sections = useMemo(() => {
+    const grouped: Record<'continue' | 'week' | 'popular', HomeSection[]> = {
+      continue: [],
+      week: [],
+      popular: [],
+    };
+
+    if (continueExploring.length > 0) {
+      grouped.continue.push({
+        key: 'continue',
+        source: 'recently_viewed',
+        variant: 'continue',
+        title: 'Продължи оттук',
+        data: continueExploring,
+      });
+    }
+
+    for (const section of personalizedSections) {
+      const key: SectionKey = section.key === 'trending' ? 'popular' : 'week';
+      const variant: SectionVariant = section.key === 'from_followed_organizers' ? 'following' : key;
+      grouped[key].push({
+        key,
+        source: section.key,
+        variant,
+        title: section.title,
+        data: section.items,
+      });
+    }
+
+    if (!weekQuery.isLoading && weekFiltered.length > 0) {
+      grouped.week.push({
+        key: 'week',
+        source: 'week',
+        variant: 'week',
+        title: 'Тази седмица',
+        data: weekFiltered,
+      });
+    }
+    if (!popularQuery.isLoading && popular.length > 0) {
+      grouped.popular.push({
+        key: 'popular',
+        source: 'popular',
+        variant: 'popular',
+        title: 'Най-запазвани',
+        data: popular,
+      });
+    }
+
+    const ordered = sessionOrder.flatMap((key) => grouped[key]);
+    return ordered.map((section) => ({ ...section, title: pickSectionTitle(section) }));
+  }, [
+    continueExploring,
+    personalizedSections,
+    popular,
+    popularQuery.isLoading,
+    sessionOrder,
+    weekFiltered,
+    weekQuery.isLoading,
+  ]);
 
   const refetchAll = useCallback(() => {
     void trendingQuery.refetch();
@@ -567,7 +685,7 @@ export default function HomeScreen() {
       }
       router.push(`/festival/${item.slug}`);
     },
-    [router, queryClient],
+    [router],
   );
 
   const onSave = useCallback(
@@ -613,7 +731,7 @@ export default function HomeScreen() {
 
   const renderSectionItem = useCallback(
     ({ item, index, section }: SectionListRenderItemInfo<FestivalListItem, HomeSection>) =>
-      section.key === 'continue' ? (
+      section.variant === 'continue' ? (
         index === 0 ? (
           <View style={styles.continueCarouselWrap}>
             <FlatList
@@ -627,6 +745,7 @@ export default function HomeScreen() {
               renderItem={({ item: continueItem }) => (
                 <ContinueCard
                   item={continueItem}
+                  title={section.title}
                   onPressCard={() => openFestival(continueItem)}
                   onPressSave={() => onSave(continueItem)}
                   saveDisabled={pendingIds.has(continueItem.festivalId)}
@@ -638,7 +757,7 @@ export default function HomeScreen() {
             />
           </View>
         ) : null
-      ) : section.key === 'week' ? (
+      ) : section.variant === 'week' || section.variant === 'following' ? (
         <CompactWeekCard
           item={item}
           onPressCard={() => openFestival(item)}
@@ -668,6 +787,39 @@ export default function HomeScreen() {
 
   /** RN lists can skip cell updates if only nested fields change; `dataUpdatedAt` bumps on every cache patch. */
   const listExtrasKey = `${trendingQuery.dataUpdatedAt}|${weekQuery.dataUpdatedAt}|${popularQuery.dataUpdatedAt}|${[...pendingIds].sort().join(',')}`;
+  const renderSectionHeader = useCallback(({ section }: { section: HomeSection }) => {
+    const toneStyle =
+      section.variant === 'popular'
+        ? styles.sectionHeaderPopular
+        : section.variant === 'following'
+          ? styles.sectionHeaderFollowing
+          : section.variant === 'continue'
+            ? styles.sectionHeaderContinue
+            : styles.sectionHeaderWeek;
+    const badgeLabel =
+      section.source === 'near_you'
+        ? 'Наблизо'
+        : section.source === 'from_followed_organizers'
+          ? 'Следвани'
+          : section.source === 'for_you'
+            ? 'Персонално'
+            : section.source === 'this_weekend'
+              ? 'Уикенд'
+              : section.source === 'trending'
+                ? 'В тренд'
+                : undefined;
+
+    return (
+      <View style={[styles.sectionHeaderWrap, toneStyle]}>
+        <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>{section.title}</Text>
+        {badgeLabel ? (
+          <View style={styles.sectionBadge}>
+            <Text style={styles.sectionBadgeText}>{badgeLabel}</Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  }, []);
 
   return (
     <SectionList<HomeSection['data'][number], HomeSection>
@@ -690,9 +842,7 @@ export default function HomeScreen() {
         styles.listContent,
         { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 48 },
       ]}
-      renderSectionHeader={({ section }) => (
-        <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>{section.title}</Text>
-      )}
+      renderSectionHeader={renderSectionHeader}
       SectionSeparatorComponent={() => <View style={styles.sectionSep} />}
       renderItem={renderSectionItem}
       ListHeaderComponent={
@@ -701,7 +851,7 @@ export default function HomeScreen() {
 
           {showTrending ? (
             <View style={styles.trendingSection}>
-              <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>🔥 Популярни сега</Text>
+              <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>🔥 {trendingTitle}</Text>
               {trendingQuery.isError ? (
                 <SectionError message="Не успяхме да заредим секцията." onRetry={() => trendingQuery.refetch()} />
               ) : trendingQuery.isLoading && trending.length === 0 ? (
@@ -737,14 +887,14 @@ export default function HomeScreen() {
 
           {weekQuery.isLoading && week.length === 0 ? (
             <View style={styles.skeletonSection}>
-              <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>📅 Тази седмица</Text>
+              <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>📅 {weekFallbackTitle}</Text>
               {[0, 1, 2].map((i) => (
                 <WeekSkeletonRow key={i} />
               ))}
             </View>
           ) : weekQuery.isError ? (
             <View style={styles.skeletonSection}>
-              <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>📅 Тази седмица</Text>
+              <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>📅 {weekFallbackTitle}</Text>
               <SectionError message="Не успяхме да заредим секцията." onRetry={() => weekQuery.refetch()} />
             </View>
           ) : null}
@@ -755,7 +905,7 @@ export default function HomeScreen() {
                 styles.skeletonSection,
                 weekHeaderBlockInListHeader ? styles.skeletonSectionAfter : null,
               ]}>
-              <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>⭐ Най-запазвани</Text>
+              <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>⭐ {popularFallbackTitle}</Text>
               {[0, 1, 2].map((i) => (
                 <PopularSkeletonRow key={i} />
               ))}
@@ -766,7 +916,7 @@ export default function HomeScreen() {
                 styles.skeletonSection,
                 weekHeaderBlockInListHeader ? styles.skeletonSectionAfter : null,
               ]}>
-              <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>⭐ Най-запазвани</Text>
+              <Text style={[festivalUi.typography.sectionTitle, styles.sectionTitle]}>⭐ {popularFallbackTitle}</Text>
               <SectionError message="Не успяхме да заредим секцията." onRetry={() => popularQuery.refetch()} />
             </View>
           ) : null}
@@ -813,10 +963,40 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   sectionTitle: {
-    marginBottom: 16,
+    marginBottom: 8,
   },
   sectionSep: {
     height: 24,
+  },
+  sectionHeaderWrap: {
+    marginBottom: 8,
+  },
+  sectionHeaderWeek: {
+    paddingLeft: 2,
+  },
+  sectionHeaderPopular: {
+    paddingLeft: 2,
+  },
+  sectionHeaderFollowing: {
+    paddingLeft: 2,
+  },
+  sectionHeaderContinue: {
+    paddingLeft: 2,
+  },
+  sectionBadge: {
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+  },
+  sectionBadgeText: {
+    fontSize: 11,
+    color: '#3730A3',
+    fontWeight: '600',
   },
   trendingSection: {
     marginBottom: 22,
@@ -904,10 +1084,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    paddingVertical: 10,
+    paddingVertical: 9,
     paddingHorizontal: 12,
     marginBottom: 12,
     gap: 12,
@@ -964,11 +1144,11 @@ const styles = StyleSheet.create({
   },
   popularCard: {
     marginBottom: 12,
-    borderRadius: 14,
+    borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFBEB',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#FDE68A',
   },
   popularAccentBar: {
     height: 2,
@@ -980,7 +1160,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     gap: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFBEB',
   },
   popularThumb: {
     width: 64,
@@ -1029,21 +1209,21 @@ const styles = StyleSheet.create({
     width: 10,
   },
   continueCard: {
-    width: 264,
+    width: 288,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: '#FFFFFF',
+    borderColor: '#DBEAFE',
+    backgroundColor: '#F8FAFF',
     paddingVertical: 9,
     paddingHorizontal: 10,
     gap: 10,
   },
   continueThumb: {
-    width: 62,
-    height: 62,
-    borderRadius: 10,
+    width: 76,
+    height: 76,
+    borderRadius: 12,
     backgroundColor: '#F3F4F6',
     overflow: 'hidden',
   },
@@ -1053,9 +1233,9 @@ const styles = StyleSheet.create({
   },
   continueHint: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#4F46E5',
-    marginBottom: 2,
+    marginBottom: 3,
   },
   continueTitle: {
     fontSize: 14,
@@ -1071,6 +1251,22 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 11,
     color: COLORS.muted,
+  },
+  continueProgressChip: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: '#EEF2FF',
+  },
+  continueProgressText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#4338CA',
   },
   continueSave: {
     padding: 4,
