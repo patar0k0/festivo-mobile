@@ -27,7 +27,7 @@ import type { FestivalListItem } from '@/lib/api/festivals';
 import { getFestivalBySlug, getFestivals } from '@/lib/api/festivals';
 import { getPersonalizedSections } from '@/lib/api/recommendations';
 import { formatDateRangeRelative, getRelativeDateLabel } from '@/lib/festival/relativeDate';
-import { getRecentlyViewedFestivals } from '@/lib/personalization/recentlyViewed';
+import { getRecentlyViewedFestivals, type RecentlyViewedFestival } from '@/lib/personalization/recentlyViewed';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 import { queryClient } from '@/lib/queryClient';
 
@@ -43,6 +43,18 @@ type HomeSection = {
   title: string;
   data: FestivalListItem[];
 };
+
+function formatViewedAgo(viewedAt?: string): string {
+  if (!viewedAt) return 'Наскоро';
+  const ms = Date.parse(viewedAt);
+  if (!Number.isFinite(ms)) return 'Наскоро';
+  const diffMin = Math.max(1, Math.round((Date.now() - ms) / 60000));
+  if (diffMin < 60) return `Преди ${diffMin} мин`;
+  const diffHours = Math.round(diffMin / 60);
+  if (diffHours < 24) return `Преди ${diffHours} ч`;
+  const diffDays = Math.round(diffHours / 24);
+  return `Преди ${diffDays} д`;
+}
 
 function TrendingItemSeparator() {
   return <View style={styles.trendingItemSep} />;
@@ -295,6 +307,70 @@ function CompactWeekCard({
   );
 }
 
+function ContinueCard({
+  item,
+  onPressCard,
+  onPressSave,
+  saveDisabled,
+}: {
+  item: RecentlyViewedFestival;
+  onPressCard: () => void;
+  onPressSave: () => void;
+  saveDisabled?: boolean;
+}) {
+  const uri = item.image_url?.trim() ? item.image_url.trim() : null;
+  const range = formatDateRangeRelative(item.start_date, item.end_date);
+  const isSaving = Boolean(saveDisabled);
+  return (
+    <PressableScale onPress={onPressCard} pressedScale={0.985} pressedOpacity={0.92} style={styles.continueCard}>
+      <View style={styles.continueThumb}>
+        {uri ? (
+          <ExpoImage
+            source={{ uri }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={180}
+            cachePolicy="memory-disk"
+            priority="high"
+          />
+        ) : (
+          <LinearGradient pointerEvents="none" colors={['#E85D5D', '#B91C1C']} style={StyleSheet.absoluteFill}>
+            <Text style={styles.thumbFallbackEmojiSm}>🎉</Text>
+          </LinearGradient>
+        )}
+      </View>
+      <View style={styles.continueBody}>
+        <Text style={styles.continueHint}>Продължи оттук</Text>
+        <Text style={styles.continueTitle} numberOfLines={2}>
+          {item.title}
+        </Text>
+        <Text style={styles.continueMeta} numberOfLines={1}>
+          {(item.city || 'България') + ' · ' + range}
+        </Text>
+        <Text style={styles.continueViewedAt} numberOfLines={1}>
+          {formatViewedAgo(item.viewed_at)}
+        </Text>
+      </View>
+      <Pressable
+        disabled={saveDisabled}
+        onPress={onPressSave}
+        style={({ pressed }) => [
+          styles.continueSave,
+          saveDisabled && styles.saveBtnDisabled,
+          isSaving && styles.listSaveSaving,
+          pressed && !saveDisabled && styles.iconPressed,
+        ]}
+        hitSlop={10}>
+        {isSaving ? (
+          <ActivityIndicator size="small" color={COLORS.text} />
+        ) : (
+          <AnimatedBookmark filled={item.saved} size={20} color={item.saved ? COLORS.text : COLORS.secondary} />
+        )}
+      </Pressable>
+    </PressableScale>
+  );
+}
+
 function PopularCard({
   item,
   onPressCard,
@@ -450,7 +526,7 @@ export default function HomeScreen() {
   const sections: HomeSection[] = [];
   const continueExploring = (recentlyViewedQuery.data ?? []).slice(0, 6);
   if (continueExploring.length > 0) {
-    sections.push({ key: 'continue', title: '🧭 Continue exploring', data: continueExploring });
+    sections.push({ key: 'continue', title: '🧭 Продължи да разглеждаш', data: continueExploring });
   }
   const personalizedSections = personalizedQuery.data ?? [];
   for (const section of personalizedSections) {
@@ -536,8 +612,33 @@ export default function HomeScreen() {
   );
 
   const renderSectionItem = useCallback(
-    ({ item, section }: SectionListRenderItemInfo<FestivalListItem, HomeSection>) =>
-      section.key === 'week' || section.key === 'continue' ? (
+    ({ item, index, section }: SectionListRenderItemInfo<FestivalListItem, HomeSection>) =>
+      section.key === 'continue' ? (
+        index === 0 ? (
+          <View style={styles.continueCarouselWrap}>
+            <FlatList
+              data={section.data as RecentlyViewedFestival[]}
+              horizontal
+              keyExtractor={(continueItem) => continueItem.festivalId}
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.continueCarouselContent}
+              ItemSeparatorComponent={() => <View style={styles.continueCarouselSep} />}
+              renderItem={({ item: continueItem }) => (
+                <ContinueCard
+                  item={continueItem}
+                  onPressCard={() => openFestival(continueItem)}
+                  onPressSave={() => onSave(continueItem)}
+                  saveDisabled={pendingIds.has(continueItem.festivalId)}
+                />
+              )}
+              initialNumToRender={4}
+              windowSize={5}
+              maxToRenderPerBatch={4}
+            />
+          </View>
+        ) : null
+      ) : section.key === 'week' ? (
         <CompactWeekCard
           item={item}
           onPressCard={() => openFestival(item)}
@@ -715,7 +816,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionSep: {
-    height: 28,
+    height: 24,
   },
   trendingSection: {
     marginBottom: 22,
@@ -844,7 +945,7 @@ const styles = StyleSheet.create({
   },
   compactTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     color: COLORS.text,
   },
   compactCity: {
@@ -863,15 +964,15 @@ const styles = StyleSheet.create({
   },
   popularCard: {
     marginBottom: 12,
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: '#FFFBEB',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: COLORS.border,
   },
   popularAccentBar: {
-    height: 4,
-    backgroundColor: '#F59E0B',
+    height: 2,
+    backgroundColor: 'rgba(245,158,11,0.4)',
   },
   popularInner: {
     flexDirection: 'row',
@@ -903,7 +1004,7 @@ const styles = StyleSheet.create({
   popularTitle: {
     flex: 1,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     color: COLORS.text,
   },
   popularMeta: {
@@ -914,10 +1015,65 @@ const styles = StyleSheet.create({
   popularHint: {
     marginTop: 2,
     fontSize: 11,
+    fontWeight: '500',
+    color: '#A16207',
+  },
+  continueCarouselWrap: {
+    marginHorizontal: -festivalUi.screenPadding,
+  },
+  continueCarouselContent: {
+    paddingHorizontal: festivalUi.screenPadding,
+    paddingBottom: 2,
+  },
+  continueCarouselSep: {
+    width: 10,
+  },
+  continueCard: {
+    width: 264,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    gap: 10,
+  },
+  continueThumb: {
+    width: 62,
+    height: 62,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    overflow: 'hidden',
+  },
+  continueBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  continueHint: {
+    fontSize: 10,
     fontWeight: '600',
-    color: '#B45309',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    color: '#4F46E5',
+    marginBottom: 2,
+  },
+  continueTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  continueMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    color: COLORS.secondary,
+  },
+  continueViewedAt: {
+    marginTop: 3,
+    fontSize: 11,
+    color: COLORS.muted,
+  },
+  continueSave: {
+    padding: 4,
   },
   compactSkeletonRow: {
     flexDirection: 'row',

@@ -7,7 +7,7 @@ import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { festivalUi } from '@/components/ui/FestivalCard';
 
-const BAR_HEIGHT = 58;
+const BAR_HEIGHT = 50;
 
 type Props = {
   saved: boolean;
@@ -33,7 +33,7 @@ export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
   calendarDisabled,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const bottomPad = Math.max(insets.bottom, 10);
+  const bottomPad = Math.max(insets.bottom, 4);
 
   return (
     <View style={[styles.wrap, { paddingBottom: bottomPad }]} pointerEvents="box-none">
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.96)',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E5E7EB',
     ...Platform.select({
@@ -124,8 +124,8 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
+        shadowOpacity: 0.06,
+        shadowRadius: 9,
       },
     }),
   },
@@ -134,17 +134,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingHorizontal: 6,
-    paddingTop: 10,
+    paddingTop: 5,
     minHeight: BAR_HEIGHT,
   },
   action: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 5,
     marginHorizontal: 2,
-    borderRadius: 14,
-    gap: 4,
+    borderRadius: 12,
+    gap: 3,
   },
   actionPrimary: {
     backgroundColor: festivalUi.colors.buttonBg,
@@ -153,8 +153,8 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   actionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '600',
     color: festivalUi.colors.text,
   },
   actionLabelPrimary: {

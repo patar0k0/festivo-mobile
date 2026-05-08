@@ -31,7 +31,7 @@ import { VerifiedBadge } from '@/components/organizer/VerifiedBadge';
 import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { Skeleton, skeletonRadii, skeletonRhythm } from '@/components/ui/Skeleton';
-import { FestivalCard, festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
+import { festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
 import type { FestivalDetail, FestivalListItem } from '@/lib/api/festivals';
 import { getFestival, getFestivals } from '@/lib/api/festivals';
 import { trackEvent } from '@/lib/analytics/track';
@@ -47,7 +47,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const HERO_H = Platform.OS === 'android' ? 268 : 300;
-const GALLERY_THUMB = 108;
+const GALLERY_INITIAL_LIMIT = 4;
 const DESC_COLLAPSED_LINES = 6;
 const DESC_READ_MORE_MIN_CHARS = 200;
 const SAVE_PENDING_MS = 25000;
@@ -190,6 +190,49 @@ const MetaChip = memo(function MetaChip({
         {label}
       </Text>
     </View>
+  );
+});
+
+const RelatedMiniCard = memo(function RelatedMiniCard({
+  item,
+  saving,
+  onPressCard,
+  onPressSave,
+}: {
+  item: FestivalListItem;
+  saving: boolean;
+  onPressCard: () => void;
+  onPressSave: () => void;
+}) {
+  const uri = item.image_url?.trim() ? item.image_url.trim() : null;
+  const dateLabel = formatDateRangeRelative(item.start_date, item.end_date);
+  return (
+    <PressableScale onPress={onPressCard} pressedScale={0.985} pressedOpacity={0.92} style={styles.relatedMiniCard}>
+      <View style={styles.relatedMiniThumb}>
+        {uri ? (
+          <ExpoImage source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={180} cachePolicy="memory-disk" />
+        ) : (
+          <View style={styles.relatedMiniThumbFallback}>
+            <Text style={styles.relatedMiniThumbEmoji}>🎉</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.relatedMiniBody}>
+        <Text style={styles.relatedMiniTitle} numberOfLines={2}>
+          {item.title}
+        </Text>
+        <Text style={styles.relatedMiniMeta} numberOfLines={1}>
+          {item.city || 'България'} · {dateLabel}
+        </Text>
+      </View>
+      <Pressable
+        onPress={onPressSave}
+        hitSlop={10}
+        disabled={saving}
+        style={({ pressed }) => [styles.relatedSaveBtn, pressed && !saving && styles.relatedSaveBtnPressed, saving && styles.relatedSaveBtnSaving]}>
+        {saving ? <ActivityIndicator size="small" color={festivalUi.colors.text} /> : <AnimatedBookmark filled={item.saved} size={20} color={item.saved ? festivalUi.colors.text : festivalUi.colors.secondary} />}
+      </Pressable>
+    </PressableScale>
   );
 });
 
@@ -483,8 +526,9 @@ export default function FestivalDetailScreen() {
   const coverUri =
     typeof data.image_url === 'string' && data.image_url.trim() ? data.image_url.trim() : undefined;
   const allGallery = data.gallery_urls ?? [];
-  const galleryStrip =
-    allGallery.length > 1 ? allGallery.filter((u) => u !== coverUri) : allGallery.length ? allGallery : [];
+  const galleryStrip = allGallery.length > 1 ? allGallery.filter((u) => u !== coverUri) : allGallery.length ? allGallery : [];
+  const galleryPreview = galleryStrip.slice(0, GALLERY_INITIAL_LIMIT);
+  const hasMoreGallery = galleryStrip.length > GALLERY_INITIAL_LIMIT;
 
   const dateRangeLine = formatDateRangeRelative(data.start_date, data.end_date);
   const durationLine = quickDurationLabel(data);
@@ -534,7 +578,7 @@ export default function FestivalDetailScreen() {
               source={{ uri: coverUri }}
               style={styles.heroImage}
               contentFit="cover"
-              contentPosition="top"
+              contentPosition={{ top: 0.32 }}
               transition={260}
               cachePolicy="memory-disk"
               priority="high"
@@ -544,11 +588,11 @@ export default function FestivalDetailScreen() {
           )}
           <LinearGradient
             pointerEvents="none"
-            colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.88)']}
-            locations={[0, 0.45, 1]}
+            colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.34)', 'rgba(0,0,0,0.78)', 'rgba(0,0,0,0.92)']}
+            locations={[0, 0.32, 0.72, 1]}
             style={StyleSheet.absoluteFill}
           />
-          <View pointerEvents="none" style={[styles.heroTextBlock, { bottom: 20 }]}>
+          <View pointerEvents="none" style={[styles.heroTextBlock, { bottom: 14 }]}>
             <Text style={styles.heroTitle} numberOfLines={2}>
               {data.title}
             </Text>
@@ -689,7 +733,7 @@ export default function FestivalDetailScreen() {
             entering={FadeInDown.duration(260).delay(240)}>
             <Text style={[styles.sectionHeading, styles.galleryHeading]}>Галерия</Text>
             <View style={styles.galleryGrid}>
-              {galleryStrip.slice(0, 9).map((uri, index) => (
+              {galleryPreview.map((uri, index) => (
                 <Pressable
                   key={`${uri}-${index}`}
                   onPress={() => openGallery(uri)}
@@ -704,6 +748,12 @@ export default function FestivalDetailScreen() {
                 </Pressable>
               ))}
             </View>
+            {hasMoreGallery ? (
+              <Pressable onPress={() => openGallery(galleryStrip[0])} style={styles.galleryCta}>
+                <Text style={styles.galleryCtaText}>Виж всички снимки</Text>
+                <Ionicons name="chevron-forward" size={16} color="#4F46E5" />
+              </Pressable>
+            ) : null}
           </Reanimated.View>
         ) : null}
 
@@ -719,9 +769,9 @@ export default function FestivalDetailScreen() {
               keyboardShouldPersistTaps="handled">
               {relatedList.map((item) => (
                 <View key={item.festivalId} style={styles.relatedCardWrap}>
-                  <FestivalCard
-                    variant="carousel"
+                  <RelatedMiniCard
                     item={item}
+                    saving={pendingIds.has(item.festivalId)}
                     onPressCard={() => router.push(`/festival/${item.slug}`)}
                     onPressSave={() => {
                       setPendingIds((prev) => new Set(prev).add(item.festivalId));
@@ -738,7 +788,6 @@ export default function FestivalDetailScreen() {
                         },
                       );
                     }}
-                    saveDisabled={pendingIds.has(item.festivalId)}
                   />
                 </View>
               ))}
@@ -789,19 +838,19 @@ const styles = StyleSheet.create({
   heroTextBlock: {
     position: 'absolute',
     left: festivalUi.screenPadding,
-    right: festivalUi.screenPadding + 54,
-    bottom: 18,
+    right: festivalUi.screenPadding + 48,
+    bottom: 14,
   },
   heroTitle: {
     color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '800',
-    lineHeight: 32,
+    fontSize: 26,
+    fontWeight: '700',
+    lineHeight: 30,
     letterSpacing: -0.4,
     textShadowColor: 'rgba(0,0,0,0.55)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 10,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   heroChips: {
     flexDirection: 'row',
@@ -813,20 +862,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingVertical: 5,
+    borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.94)',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.06)',
     maxWidth: '100%',
   },
   metaChipDark: {
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   metaChipText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
     color: festivalUi.colors.text,
     maxWidth: 220,
   },
@@ -838,25 +887,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingVertical: 5,
+    borderRadius: 12,
     backgroundColor: 'rgba(16,185,129,0.35)',
     borderWidth: 1,
     borderColor: 'rgba(167,243,208,0.45)',
   },
-  verifyChipText: { fontSize: 12, fontWeight: '800', color: '#ECFDF5' },
+  verifyChipText: { fontSize: 12, fontWeight: '600', color: '#ECFDF5' },
   trendChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingVertical: 5,
+    borderRadius: 12,
     backgroundColor: 'rgba(251,191,36,0.28)',
     borderWidth: 1,
     borderColor: 'rgba(253,230,138,0.4)',
   },
-  trendChipText: { fontSize: 12, fontWeight: '800', color: '#FFFBEB' },
+  trendChipText: { fontSize: 12, fontWeight: '600', color: '#FFFBEB' },
   heroBookmark: {
     position: 'absolute',
     width: 46,
@@ -878,18 +927,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: festivalUi.screenPadding - 4,
-    paddingTop: 16,
+    paddingTop: 12,
     gap: 10,
   },
   quickTile: {
     width: '47%',
     flexGrow: 1,
     minWidth: '42%',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     backgroundColor: '#FAFAFA',
-    padding: 12,
+    padding: 11,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -909,23 +958,23 @@ const styles = StyleSheet.create({
   },
   quickTileLabel: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '600',
     color: festivalUi.colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.45,
     marginBottom: 4,
   },
   quickTileValue: {
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: '700',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
     color: festivalUi.colors.text,
   },
   sectionHeading: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
     color: festivalUi.colors.text,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   lightboxRoot: {
     flex: 1,
@@ -961,11 +1010,11 @@ const styles = StyleSheet.create({
   },
   blockPad: {
     paddingHorizontal: festivalUi.screenPadding,
-    paddingTop: 22,
+    paddingTop: 20,
   },
   description: {
     fontSize: 16,
-    lineHeight: 26,
+    lineHeight: 27,
     color: '#374151',
   },
   textLinkWrap: {
@@ -982,7 +1031,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 14,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     backgroundColor: '#FAFAFA',
@@ -1008,15 +1057,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   organizerName: {
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: festivalUi.colors.text,
     flexShrink: 1,
   },
   orgSubtitle: {
     marginTop: 4,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: festivalUi.colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
@@ -1025,10 +1074,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
     color: festivalUi.colors.muted,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   gallerySection: {
-    marginTop: 8,
+    marginTop: 4,
     paddingBottom: 8,
   },
   galleryHeading: {
@@ -1038,15 +1087,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: festivalUi.screenPadding,
-    gap: 8,
+    gap: 10,
     marginTop: 4,
   },
   gridThumbWrap: {
-    width: '31%',
-    flexGrow: 1,
-    aspectRatio: 1,
-    minWidth: '30%',
-    borderRadius: 14,
+    width: '48%',
+    aspectRatio: 1.04,
+    borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#F3F4F6',
   },
@@ -1058,16 +1105,90 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   relatedSection: {
-    marginTop: 8,
-    paddingBottom: 24,
+    marginTop: 6,
+    paddingBottom: 20,
   },
   relatedScroll: {
     paddingHorizontal: festivalUi.screenPadding,
-    gap: 12,
+    gap: 10,
     paddingTop: 4,
   },
   relatedCardWrap: {
-    width: 280,
+    width: 246,
+  },
+  relatedMiniCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  relatedMiniThumb: {
+    width: '100%',
+    height: 126,
+    backgroundColor: '#F3F4F6',
+  },
+  relatedMiniThumbFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  relatedMiniThumbEmoji: {
+    fontSize: 32,
+  },
+  relatedMiniBody: {
+    paddingHorizontal: 10,
+    paddingTop: 9,
+    paddingBottom: 10,
+    gap: 4,
+  },
+  relatedMiniTitle: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '600',
+    color: festivalUi.colors.text,
+  },
+  relatedMiniMeta: {
+    fontSize: 12,
+    color: festivalUi.colors.secondary,
+  },
+  relatedSaveBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(17,24,39,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  relatedSaveBtnPressed: {
+    opacity: 0.82,
+  },
+  relatedSaveBtnSaving: {
+    opacity: 0.64,
+  },
+  galleryCta: {
+    marginTop: 10,
+    marginHorizontal: festivalUi.screenPadding,
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(79,70,229,0.22)',
+    backgroundColor: 'rgba(79,70,229,0.06)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  galleryCtaText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4338CA',
   },
   scrollContentBottom: {
     paddingBottom: 32,

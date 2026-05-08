@@ -39,7 +39,7 @@ export default function TabsGroupLayout() {
       <Tabs.Screen
         name="following"
         options={{
-          title: "Following",
+          title: 'Следвани',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name="people-outline" size={focused ? 24 : 22} color={color} />
           ),
