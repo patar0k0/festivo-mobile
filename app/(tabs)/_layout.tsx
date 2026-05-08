@@ -37,6 +37,15 @@ export default function TabsGroupLayout() {
         }}
       />
       <Tabs.Screen
+        name="following"
+        options={{
+          title: "Following",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name="people-outline" size={focused ? 24 : 22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="saved"
         options={{
           title: 'Запазени',

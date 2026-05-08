@@ -8,11 +8,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,9 +22,25 @@ import { PressableScale } from '@/components/ui/PressableScale';
 import { festivalUi } from '@/components/ui/FestivalCard';
 import type { FestivalListItem } from '@/lib/api/festivals';
 import { getFestivals } from '@/lib/api/festivals';
+import { trackEvent } from '@/lib/analytics/track';
 import { BULGARIA_REGION, getSofiaRegion, isValidCoordinatePair, looksLikeBulgaria } from '@/lib/map/coordinates';
 
-const MAX_MARKERS = 55;
+const MAX_VISIBLE_POINTS = 90;
+const REGION_DEBOUNCE_MS = 420;
+const CATEGORY_FILTERS = [
+  { key: 'all', label: 'Всички' },
+  { key: 'music', label: 'Music' },
+  { key: 'food', label: 'Food' },
+  { key: 'culture', label: 'Culture' },
+] as const;
+
+type CategoryFilter = (typeof CATEGORY_FILTERS)[number]['key'];
+type ClusterPoint = {
+  id: string;
+  latitude: number;
+  longitude: number;
+  items: FestivalListItem[];
+};
 
 function itemCoordinate(item: FestivalListItem): { latitude: number; longitude: number } | null {
   const lat = item.lat;
@@ -38,11 +56,21 @@ export default function FestivalsMapScreen() {
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<FestivalListItem | null>(null);
   const [userLoc, setUserLoc] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [activeRegion, setActiveRegion] = useState<Region | null>(null);
+  const [pendingRegion, setPendingRegion] = useState<Region | null>(null);
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
+  const [searchAreaDirty, setSearchAreaDirty] = useState(false);
   const mapRef = useRef<MapView | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data, isPending, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['festivals', 'map', 'trending'],
-    queryFn: () => getFestivals({ sort: 'trending', limit: 80 }),
+    queryKey: ['festivals', 'map', 'trending', activeCategory],
+    queryFn: () =>
+      getFestivals({
+        sort: 'trending',
+        limit: 220,
+        ...(activeCategory !== 'all' ? { category: activeCategory } : {}),
+      }),
     staleTime: 60_000,
   });
 
@@ -83,8 +111,56 @@ export default function FestivalsMapScreen() {
         return da - db;
       });
     }
-    return withCoords.slice(0, MAX_MARKERS);
-  }, [data, userLoc]);
+    const region = activeRegion ?? pendingRegion;
+    const inViewport = region
+      ? withCoords.filter((item) => {
+          const c = itemCoordinate(item);
+          if (!c) return false;
+          const latMin = region.latitude - region.latitudeDelta / 2;
+          const latMax = region.latitude + region.latitudeDelta / 2;
+          const lngMin = region.longitude - region.longitudeDelta / 2;
+          const lngMax = region.longitude + region.longitudeDelta / 2;
+          return c.latitude >= latMin && c.latitude <= latMax && c.longitude >= lngMin && c.longitude <= lngMax;
+        })
+      : withCoords;
+    return inViewport.slice(0, MAX_VISIBLE_POINTS);
+  }, [activeRegion, data, pendingRegion, userLoc]);
+
+  const clusteredPoints = useMemo<ClusterPoint[]>(() => {
+    if (!markerItems.length) return [];
+    const region = activeRegion ?? pendingRegion;
+    if (!region) {
+      return markerItems
+        .map((item) => itemCoordinate(item))
+        .filter((x): x is { latitude: number; longitude: number } => Boolean(x))
+        .map((coord, idx) => ({
+          id: `single:${markerItems[idx]!.festivalId}`,
+          latitude: coord.latitude,
+          longitude: coord.longitude,
+          items: [markerItems[idx]!],
+        }));
+    }
+    const cellLat = Math.max(0.015, region.latitudeDelta / 11);
+    const cellLng = Math.max(0.015, region.longitudeDelta / 11);
+    const clusters = new Map<string, ClusterPoint>();
+    for (const item of markerItems) {
+      const c = itemCoordinate(item);
+      if (!c) continue;
+      const y = Math.floor(c.latitude / cellLat);
+      const x = Math.floor(c.longitude / cellLng);
+      const key = `${x}:${y}`;
+      const existing = clusters.get(key);
+      if (!existing) {
+        clusters.set(key, { id: key, latitude: c.latitude, longitude: c.longitude, items: [item] });
+      } else {
+        existing.items.push(item);
+        const n = existing.items.length;
+        existing.latitude = (existing.latitude * (n - 1) + c.latitude) / n;
+        existing.longitude = (existing.longitude * (n - 1) + c.longitude) / n;
+      }
+    }
+    return [...clusters.values()];
+  }, [activeRegion, markerItems, pendingRegion]);
 
   const initialRegion = useMemo(() => {
     if (userLoc) {
@@ -111,6 +187,7 @@ export default function FestivalsMapScreen() {
         }
       : getSofiaRegion(0.5);
     m.animateToRegion(reg, 520);
+    void trackEvent({ event: 'map_interaction', source: 'recenter' });
   }, [userLoc]);
 
   const onMarkerPress = useCallback((item: FestivalListItem) => {
@@ -132,12 +209,54 @@ export default function FestivalsMapScreen() {
     }
   }, []);
 
+  const onSelectCluster = useCallback((cluster: ClusterPoint) => {
+    if (cluster.items.length <= 1) {
+      onMarkerPress(cluster.items[0]!);
+      return;
+    }
+    const m = mapRef.current;
+    if (!m) return;
+    m.animateToRegion(
+      {
+        latitude: cluster.latitude,
+        longitude: cluster.longitude,
+        latitudeDelta: Math.max(0.04, (activeRegion?.latitudeDelta ?? 0.2) * 0.55),
+        longitudeDelta: Math.max(0.04, (activeRegion?.longitudeDelta ?? 0.2) * 0.55),
+      },
+      280,
+    );
+    void trackEvent({ event: 'map_interaction', source: 'cluster_zoom', metadata: { size: cluster.items.length } });
+  }, [activeRegion?.latitudeDelta, activeRegion?.longitudeDelta, onMarkerPress]);
+
   const openDetail = useCallback(
     (item: FestivalListItem) => {
+      void trackEvent({ event: 'map_interaction', source: 'open_card', slug: item.slug, festival_id: item.festivalId });
       router.push(`/festival/${item.slug}`);
     },
     [router],
   );
+
+  const onRegionChangeComplete = useCallback((region: Region) => {
+    setPendingRegion(region);
+    setSearchAreaDirty(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setActiveRegion(region);
+      setSearchAreaDirty(false);
+    }, REGION_DEBOUNCE_MS);
+  }, []);
+
+  const onSearchThisArea = useCallback(() => {
+    if (pendingRegion) {
+      setActiveRegion(pendingRegion);
+      setSearchAreaDirty(false);
+      void trackEvent({
+        event: 'map_search_area',
+        source: 'map',
+        metadata: { lat: pendingRegion.latitude, lng: pendingRegion.longitude },
+      });
+    }
+  }, [pendingRegion]);
 
   if (isPending) {
     return (
@@ -171,23 +290,61 @@ export default function FestivalsMapScreen() {
         style={StyleSheet.absoluteFill}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         initialRegion={initialRegion}
+        onRegionChangeComplete={onRegionChangeComplete}
         showsUserLocation={Boolean(userLoc)}
         showsMyLocationButton={false}
         toolbarEnabled={false}>
-        {markerItems.map((item) => {
-          const c = itemCoordinate(item)!;
+        {clusteredPoints.map((cluster) => {
+          const isSingle = cluster.items.length === 1;
+          const item = cluster.items[0]!;
+          const isActive = selected?.festivalId === item.festivalId;
           return (
             <Marker
-              key={item.festivalId}
-              coordinate={c}
-              title={item.title}
-              onPress={() => onMarkerPress(item)}
+              key={cluster.id}
+              coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+              title={isSingle ? item.title : `${cluster.items.length} festivals`}
+              onPress={() => onSelectCluster(cluster)}
               tracksViewChanges={false}
-              pinColor={selected?.festivalId === item.festivalId ? '#4F46E5' : '#111827'}
-            />
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={[styles.clusterMarker, isActive && styles.clusterMarkerActive]}>
+                <Text style={styles.clusterText}>{isSingle ? '•' : String(cluster.items.length)}</Text>
+              </View>
+            </Marker>
           );
         })}
       </MapView>
+
+      <View style={[styles.categoryBar, { top: insets.top + 10 }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
+          {CATEGORY_FILTERS.map((filter) => (
+            <Pressable
+              key={filter.key}
+              onPress={() => setActiveCategory(filter.key)}
+              style={({ pressed }) => [
+                styles.categoryChip,
+                activeCategory === filter.key && styles.categoryChipActive,
+                pressed && styles.categoryChipPressed,
+              ]}
+            >
+              <Text style={[styles.categoryChipText, activeCategory === filter.key && styles.categoryChipTextActive]}>
+                {filter.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      {searchAreaDirty ? (
+        <PressableScale
+          onPress={onSearchThisArea}
+          pressedScale={0.96}
+          pressedOpacity={0.88}
+          style={[styles.searchAreaBtn, { top: insets.top + 62 }]}
+        >
+          <Text style={styles.searchAreaText}>Search this area</Text>
+        </PressableScale>
+      ) : null}
 
       <PressableScale
         onPress={onRecenter}
@@ -303,6 +460,71 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  categoryBar: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+  },
+  categoryRow: {
+    gap: 8,
+  },
+  categoryChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: 'rgba(255,255,255,0.94)',
+  },
+  categoryChipActive: {
+    backgroundColor: '#111827',
+    borderColor: '#111827',
+  },
+  categoryChipPressed: {
+    opacity: 0.7,
+  },
+  categoryChipText: {
+    fontSize: 12,
+    color: '#111827',
+    fontWeight: '700',
+  },
+  categoryChipTextActive: {
+    color: '#FFFFFF',
+  },
+  searchAreaBtn: {
+    position: 'absolute',
+    left: 20,
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    backgroundColor: '#111827',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  searchAreaText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  clusterMarker: {
+    minWidth: 24,
+    minHeight: 24,
+    paddingHorizontal: 7,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#111827',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  clusterMarkerActive: {
+    transform: [{ scale: 1.16 }],
+    backgroundColor: '#4F46E5',
+  },
+  clusterText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
   emptyFloating: {
     position: 'absolute',
