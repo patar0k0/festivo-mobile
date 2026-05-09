@@ -148,6 +148,16 @@ function attachPlannerRecencyHints(
   });
 }
 
+function resolvePopularHint(source: HomeSectionBase['source']): string | null {
+  switch (source) {
+    case 'popular': return 'Най-запазвани от общността';
+    case 'near_you': return 'Популярно около теб';
+    case 'trending': return 'Набира скорост';
+    case 'planner_city': return 'Чести избори в твоя град';
+    default: return null;
+  }
+}
+
 function mostCommon(values: string[]): string | null {
   const counts = new Map<string, number>();
   for (const value of values) {
@@ -168,6 +178,10 @@ function mostCommon(values: string[]): string | null {
 
 function TrendingItemSeparator() {
   return <View style={styles.trendingItemSep} />;
+}
+
+function SectionSeparator() {
+  return <View style={styles.sectionSep} />;
 }
 
 function TrendingSkeleton({ cardWidth }: { cardWidth: number }) {
@@ -233,7 +247,7 @@ function HomeHeader({ onSearchPress }: { onSearchPress: () => void }) {
         onPress={onSearchPress}
         hitSlop={12}
         style={({ pressed }) => [styles.searchButton, pressed && styles.searchButtonPressed]}>
-        <Ionicons name="search-outline" size={26} color={COLORS.text} />
+        <Ionicons name="search-outline" size={29} color={COLORS.text} />
       </Pressable>
     </View>
   );
@@ -499,11 +513,13 @@ function ContinueCard({
 
 function PopularCard({
   item,
+  hint,
   onPressCard,
   onPressSave,
   saveDisabled,
 }: {
   item: FestivalListItem;
+  hint?: string | null;
   onPressCard: () => void;
   onPressSave: () => void;
   saveDisabled?: boolean;
@@ -552,9 +568,11 @@ function PopularCard({
           <Text style={styles.popularMeta} numberOfLines={1}>
             {item.city || 'България'} · {range}
           </Text>
-          <Text style={styles.popularHint} numberOfLines={1}>
-            Най-запазвани от общността
-          </Text>
+          {hint ? (
+            <Text style={styles.popularHint} numberOfLines={1}>
+              {hint}
+            </Text>
+          ) : null}
           {item.planner_recency_hint ? (
             <Text style={styles.plannerRecencyHintPopular} numberOfLines={1}>
               {item.planner_recency_hint}
@@ -988,6 +1006,7 @@ export default function HomeScreen() {
       ) : (
         <PopularCard
           item={item}
+          hint={resolvePopularHint(section.source)}
           onPressCard={() => openFestival(item)}
           onPressSave={() => onSave(item)}
           saveDisabled={pendingIds.has(item.festivalId)}
@@ -1009,14 +1028,7 @@ export default function HomeScreen() {
   /** RN lists can skip cell updates if only nested fields change; `dataUpdatedAt` bumps on every cache patch. */
   const listExtrasKey = `${trendingQuery.dataUpdatedAt}|${weekQuery.dataUpdatedAt}|${popularQuery.dataUpdatedAt}|${planQuery.dataUpdatedAt}|${[...pendingIds].sort().join(',')}`;
   const renderSectionHeader = useCallback(({ section }: { section: HomeSection }) => {
-    const toneStyle =
-      section.variant === 'popular'
-        ? styles.sectionHeaderPopular
-        : section.variant === 'following'
-          ? styles.sectionHeaderFollowing
-          : section.variant === 'continue'
-            ? styles.sectionHeaderContinue
-            : styles.sectionHeaderWeek;
+    const toneStyle = styles.sectionHeaderBase;
     const badgeLabel =
       section.source === 'near_you'
         ? 'Наблизо'
@@ -1068,7 +1080,7 @@ export default function HomeScreen() {
         { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 48 },
       ]}
       renderSectionHeader={renderSectionHeader}
-      SectionSeparatorComponent={() => <View style={styles.sectionSep} />}
+      SectionSeparatorComponent={SectionSeparator}
       renderItem={renderSectionItem}
       ListHeaderComponent={
         <View style={styles.headerBlock}>
@@ -1196,16 +1208,7 @@ const styles = StyleSheet.create({
   sectionHeaderWrap: {
     marginBottom: 8,
   },
-  sectionHeaderWeek: {
-    paddingLeft: 2,
-  },
-  sectionHeaderPopular: {
-    paddingLeft: 2,
-  },
-  sectionHeaderFollowing: {
-    paddingLeft: 2,
-  },
-  sectionHeaderContinue: {
+  sectionHeaderBase: {
     paddingLeft: 2,
   },
   sectionBadge: {
