@@ -46,8 +46,11 @@ import { useTogglePlanScheduleItemMutation } from '@/lib/query/useTogglePlanSche
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 import { getFestivalIcsUrl, getFestivalPublicUrl } from '@/lib/site';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
+if (
+  Platform.OS === 'android' &&
+  (global as typeof globalThis & { nativeFabricUIManager?: unknown }).nativeFabricUIManager == null
+) {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
 }
 
 const HERO_H = Platform.OS === 'android' ? 268 : 300;

@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ListRenderItemInfo, SectionListRenderItemInfo, StyleProp, ViewStyle } from 'react-native';
 import {
     ActivityIndicator,
@@ -26,6 +26,7 @@ import { festivalUi } from '@/components/ui/FestivalCard';
 import type { FestivalListItem } from '@/lib/api/festivals';
 import { getFestivalBySlug, getFestivals } from '@/lib/api/festivals';
 import { getPersonalizedSections, type PersonalizedSection } from '@/lib/api/recommendations';
+import { debugLogRare } from '@/lib/debug/mobileDiagnosticsHelpers';
 import { formatDateRangeRelative, getRelativeDateLabel } from '@/lib/festival/relativeDate';
 import { getRecentlyViewedFestivals, type RecentlyViewedFestival } from '@/lib/personalization/recentlyViewed';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
@@ -710,6 +711,25 @@ export default function HomeScreen() {
 
     return sectionsOut.slice(0, 2);
   }, [planQuery.savedFestivalIds, recommendationPool]);
+  const plannerAwareSectionSummary = useMemo(
+    () => plannerAwareSections.map((section) => `${section.source}:${section.data.length}`).join('|'),
+    [plannerAwareSections],
+  );
+
+  useEffect(() => {
+    if (!plannerAwareSections.length) return;
+    debugLogRare(`planner_section_promote:${plannerAwareSectionSummary}`, {
+      type: 'planner_section_promote',
+      scope: 'recommendations',
+      message: 'Planner-aware home sections promoted.',
+      meta: {
+        promotedSectionCount: plannerAwareSections.length,
+        promotedSources: plannerAwareSections.map((section) => section.source),
+        sectionCounts: plannerAwareSections.map((section) => section.data.length),
+        stalePlannerAgeMs: planQuery.dataUpdatedAt ? Date.now() - planQuery.dataUpdatedAt : undefined,
+      },
+    });
+  }, [plannerAwareSectionSummary, plannerAwareSections, planQuery.dataUpdatedAt]);
 
   const trendingIds = new Set(trending.map((i) => i.festivalId));
 
@@ -836,6 +856,29 @@ export default function HomeScreen() {
     weekFiltered,
     weekQuery.isLoading,
   ]);
+  const plannerHintCount = useMemo(
+    () =>
+      sections.reduce(
+        (count, section) => count + section.data.filter((item) => Boolean(item.planner_recency_hint)).length,
+        0,
+      ),
+    [sections],
+  );
+
+  useEffect(() => {
+    if (!__DEV__ || plannerHintCount <= 0) return;
+    debugLogRare(`planner_hint_apply:${plannerHintCount}:${sections.length}`, {
+      type: 'planner_hint_apply',
+      scope: 'recommendations',
+      message: 'Planner recency hints applied to home feed items.',
+      meta: {
+        hintCount: plannerHintCount,
+        sectionCount: sections.length,
+        savedFestivalCount: planQuery.savedFestivalIds.length,
+        stalePlannerAgeMs: planQuery.dataUpdatedAt ? Date.now() - planQuery.dataUpdatedAt : undefined,
+      },
+    });
+  }, [plannerHintCount, sections.length, planQuery.savedFestivalIds.length, planQuery.dataUpdatedAt]);
 
   const refetchAll = useCallback(() => {
     void trendingQuery.refetch();

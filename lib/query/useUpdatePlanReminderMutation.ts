@@ -9,6 +9,7 @@ import {
   type MobilePlanStateDto,
   updateFestivalReminder,
 } from '@/lib/api/mobilePlan';
+import { debugLogRare, debugLogWarn } from '@/lib/debug/mobileDiagnosticsHelpers';
 import { enqueueReminderPlanMutation, isLikelyOfflinePlannerError } from '@/lib/plan/offlineQueue';
 
 type ReminderVars = { festivalId: string; type: MobilePlanReminderType };
@@ -35,6 +36,16 @@ export function useUpdatePlanReminderMutation() {
           },
         });
       }
+      debugLogRare(`reminder_update:optimistic:${festivalId}`, {
+        type: 'reminder_update',
+        scope: 'planner',
+        message: 'Planner reminder update applied optimistically.',
+        meta: {
+          festivalId,
+          reminderType: type,
+          hadPreviousPlanState: Boolean(prev),
+        },
+      });
       return { prev, intentSeq };
     },
     onError: (err, variables, ctx) => {
@@ -49,6 +60,16 @@ export function useUpdatePlanReminderMutation() {
       if (ctx.prev) {
         queryClient.setQueryData(['mobilePlanState'], ctx.prev);
       }
+      debugLogWarn({
+        type: 'reminder_rollback',
+        scope: 'planner',
+        message: 'Planner reminder update rolled back.',
+        meta: {
+          festivalId: variables.festivalId,
+          reminderType: variables.type,
+          error: err,
+        },
+      });
     },
     onSuccess: (result, variables, ctx) => {
       if (!ctx) return;
@@ -68,6 +89,15 @@ export function useUpdatePlanReminderMutation() {
             },
           },
         };
+      });
+      debugLogRare(`reminder_update:reconcile:${variables.festivalId}`, {
+        type: 'reminder_update',
+        scope: 'planner',
+        message: 'Planner reminder update reconciled with server.',
+        meta: {
+          festivalId: variables.festivalId,
+          reminderType: type,
+        },
       });
     },
     onSettled: () => {

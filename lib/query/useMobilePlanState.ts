@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { AppState } from 'react-native';
 
 import { getMobilePlanState, type MobilePlanReminderDto, type MobilePlanStateDto } from '@/lib/api/mobilePlan';
+import { debugLogError, debugLogRare } from '@/lib/debug/mobileDiagnosticsHelpers';
 import { hydrateQueuedPlannerMutations, replayQueuedPlannerMutations } from '@/lib/plan/offlineQueue';
 import { updateFestivalSavedStateInCache } from '@/lib/query/festivalSavedCache';
 import type { FollowFeedPage } from '@/lib/api/followFeed';
@@ -55,7 +56,40 @@ export function useMobilePlanState() {
   const queryClient = useQueryClient();
   const query = useQuery<MobilePlanStateDto>({
     queryKey: ['mobilePlanState'],
-    queryFn: ({ signal }) => getMobilePlanState(signal),
+    queryFn: async ({ signal }) => {
+      const startedAt = Date.now();
+      const previous = queryClient.getQueryState<MobilePlanStateDto>(['mobilePlanState']);
+      const staleAgeMs = previous?.dataUpdatedAt ? startedAt - previous.dataUpdatedAt : undefined;
+      debugLogRare('planner_hydrate_start:mobilePlanState', {
+        type: 'planner_hydrate_start',
+        scope: 'planner',
+        message: 'Mobile planner hydrate started.',
+        meta: { staleAgeMs },
+      });
+      try {
+        const state = await getMobilePlanState(signal);
+        debugLogRare('planner_hydrate_success:mobilePlanState', {
+          type: 'planner_hydrate_success',
+          scope: 'planner',
+          message: 'Mobile planner hydrate completed.',
+          meta: {
+            durationMs: Date.now() - startedAt,
+            savedFestivalCount: state.savedFestivalIds.length,
+            savedScheduleItemCount: state.savedScheduleItemIds.length,
+            reminderCount: Object.keys(state.reminders).length,
+          },
+        });
+        return state;
+      } catch (error) {
+        debugLogError({
+          type: 'planner_hydrate_error',
+          scope: 'planner',
+          message: 'Mobile planner hydrate failed.',
+          meta: { durationMs: Date.now() - startedAt, error },
+        });
+        throw error;
+      }
+    },
     staleTime: 30_000,
     refetchOnReconnect: true,
     placeholderData: keepPreviousData,

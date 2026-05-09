@@ -10,6 +10,7 @@ import {
   type MobilePlanReminderType,
   type MobilePlanStateDto,
 } from '@/lib/api/mobilePlan';
+import { debugLogError, debugLogRare, debugLogWarn } from '@/lib/debug/mobileDiagnosticsHelpers';
 import { isSyntheticPlannerScheduleItemId } from '@/lib/plan/scheduleItemId';
 
 const STORAGE_KEY_V1 = 'festivo.plannerMutationQueue.v1';
@@ -17,6 +18,7 @@ const STORAGE_KEY_V2 = 'festivo.plannerMutationQueue.v2';
 const MAX_QUEUE_SIZE = 80;
 /** Drop queued mutations older than this so replay cannot resurrect ancient intent after reinstall/long offline. */
 const MAX_ITEM_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const ENQUEUE_DIAGNOSTIC_WINDOW_MS = 5_000;
 
 export type QueuedPlannerMutation =
   | {
@@ -42,6 +44,7 @@ export type QueuedPlannerMutation =
     };
 
 let replayPromise: Promise<void> | null = null;
+const enqueueDiagnosticLoggedAtByKey = new Map<string, number>();
 
 function nowId(prefix: string): string {
   return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
@@ -84,6 +87,36 @@ function queueDedupeKey(item: QueuedPlannerMutation): string {
   if (item.kind === 'festival') return `festival:${item.festivalId}`;
   if (item.kind === 'scheduleItem') return `schedule:${item.scheduleItemId}`;
   return `reminder:${item.festivalId}`;
+}
+
+function getOldestQueueAgeMs(queue: QueuedPlannerMutation[]): number | undefined {
+  const timestamps = queue.map((item) => Date.parse(item.createdAt)).filter(Number.isFinite);
+  if (!timestamps.length) return undefined;
+  return Date.now() - Math.min(...timestamps);
+}
+
+function shouldEmitEnqueueDiagnostic(key: string): boolean {
+  const now = Date.now();
+  const previous = enqueueDiagnosticLoggedAtByKey.get(key) ?? 0;
+  if (now - previous < ENQUEUE_DIAGNOSTIC_WINDOW_MS) return false;
+  enqueueDiagnosticLoggedAtByKey.set(key, now);
+  return true;
+}
+
+function emitQueueEnqueueDiagnostic(item: QueuedPlannerMutation, queueSize: number): void {
+  const key = queueDedupeKey(item);
+  if (!shouldEmitEnqueueDiagnostic(key)) return;
+  debugLogWarn({
+    type: 'planner_queue_enqueue',
+    scope: 'queue',
+    message: 'Planner mutation queued for offline replay.',
+    meta: {
+      kind: item.kind,
+      festivalId: item.kind === 'festival' || item.kind === 'reminder' ? item.festivalId : undefined,
+      scheduleItemId: item.kind === 'scheduleItem' ? item.scheduleItemId : undefined,
+      queueSize,
+    },
+  });
 }
 
 /** Last intent per key wins; stale timestamps dropped; deterministic createdAt ordering. */
@@ -163,14 +196,16 @@ export async function enqueueFestivalPlanMutation(festivalId: string, desiredSav
     return;
   }
   const next = current.filter((item) => !(item.kind === 'festival' && item.festivalId === festivalId));
-  next.push({
+  const item: QueuedPlannerMutation = {
     id: nowId('festival'),
     kind: 'festival',
     festivalId,
     desiredSaved,
     createdAt: new Date().toISOString(),
-  });
+  };
+  next.push(item);
   await writeQueue(next);
+  emitQueueEnqueueDiagnostic(item, compactPlannerQueueForPersistence(next).slice(-MAX_QUEUE_SIZE).length);
 }
 
 export async function enqueueScheduleItemPlanMutation(scheduleItemId: string, desiredInPlan: boolean) {
@@ -185,14 +220,16 @@ export async function enqueueScheduleItemPlanMutation(scheduleItemId: string, de
   const next = current.filter(
     (item) => !(item.kind === 'scheduleItem' && item.scheduleItemId === scheduleItemId),
   );
-  next.push({
+  const item: QueuedPlannerMutation = {
     id: nowId('schedule'),
     kind: 'scheduleItem',
     scheduleItemId,
     desiredInPlan,
     createdAt: new Date().toISOString(),
-  });
+  };
+  next.push(item);
   await writeQueue(next);
+  emitQueueEnqueueDiagnostic(item, compactPlannerQueueForPersistence(next).slice(-MAX_QUEUE_SIZE).length);
 }
 
 export async function enqueueReminderPlanMutation(festivalId: string, reminderType: MobilePlanReminderType) {
@@ -202,14 +239,16 @@ export async function enqueueReminderPlanMutation(festivalId: string, reminderTy
     return;
   }
   const next = current.filter((item) => !(item.kind === 'reminder' && item.festivalId === festivalId));
-  next.push({
+  const item: QueuedPlannerMutation = {
     id: nowId('reminder'),
     kind: 'reminder',
     festivalId,
     reminderType,
     createdAt: new Date().toISOString(),
-  });
+  };
+  next.push(item);
   await writeQueue(next);
+  emitQueueEnqueueDiagnostic(item, compactPlannerQueueForPersistence(next).slice(-MAX_QUEUE_SIZE).length);
 }
 
 function patchPlanStateFromQueue(
@@ -265,11 +304,54 @@ function patchPlanStateFromQueue(
 }
 
 export async function hydrateQueuedPlannerMutations(queryClient: QueryClient): Promise<void> {
-  const queue = await readQueue();
-  if (!queue.length) return;
-  queryClient.setQueryData<MobilePlanStateDto>(['mobilePlanState'], (current) =>
-    patchPlanStateFromQueue(current, queue),
-  );
+  const startedAt = Date.now();
+  debugLogRare('planner_hydrate_start:queue', {
+    type: 'planner_hydrate_start',
+    scope: 'queue',
+    message: 'Queued planner hydration started.',
+  });
+  try {
+    const queue = await readQueue();
+    if (!queue.length) {
+      debugLogRare('planner_hydrate_success:queue:empty', {
+        type: 'planner_hydrate_success',
+        scope: 'queue',
+        message: 'Queued planner hydration completed with an empty queue.',
+        meta: { durationMs: Date.now() - startedAt, queueSize: 0 },
+      });
+      return;
+    }
+    let hadPlanState = false;
+    queryClient.setQueryData<MobilePlanStateDto>(['mobilePlanState'], (current) => {
+      hadPlanState = Boolean(current);
+      return patchPlanStateFromQueue(current, queue);
+    });
+    const hydrateEvent = {
+      type: hadPlanState ? 'planner_hydrate_success' : 'planner_hydrate_partial',
+      scope: 'queue',
+      message: hadPlanState
+        ? 'Queued planner hydration applied to cached plan state.'
+        : 'Queued planner hydration found queued intent before plan state was cached.',
+      meta: {
+        durationMs: Date.now() - startedAt,
+        queueSize: queue.length,
+        staleAgeMs: getOldestQueueAgeMs(queue),
+      },
+    } as const;
+    if (hadPlanState) {
+      debugLogRare('planner_hydrate_success:queue:applied', hydrateEvent);
+    } else {
+      debugLogWarn(hydrateEvent);
+    }
+  } catch (error) {
+    debugLogError({
+      type: 'planner_hydrate_error',
+      scope: 'queue',
+      message: 'Queued planner hydration failed.',
+      meta: { durationMs: Date.now() - startedAt, error },
+    });
+    throw error;
+  }
 }
 
 export async function replayQueuedPlannerMutations(queryClient: QueryClient): Promise<void> {
@@ -278,11 +360,31 @@ export async function replayQueuedPlannerMutations(queryClient: QueryClient): Pr
   replayPromise = (async () => {
     const queue = orderQueueForReplay(await readQueue());
     if (!queue.length) return;
+    const startedAt = Date.now();
+    debugLogRare('planner_queue_replay_start', {
+      type: 'planner_queue_replay_start',
+      scope: 'queue',
+      message: 'Queued planner replay started.',
+      meta: {
+        queueSize: queue.length,
+        staleAgeMs: getOldestQueueAgeMs(queue),
+      },
+    });
 
     let serverState: MobilePlanStateDto;
     try {
       serverState = await getMobilePlanState();
-    } catch {
+    } catch (error) {
+      debugLogError({
+        type: 'planner_queue_replay_error',
+        scope: 'queue',
+        message: 'Queued planner replay could not load server state.',
+        meta: {
+          durationMs: Date.now() - startedAt,
+          queueSize: queue.length,
+          error,
+        },
+      });
       return;
     }
 
@@ -308,7 +410,18 @@ export async function replayQueuedPlannerMutations(queryClient: QueryClient): Pr
           await updateFestivalReminder(item.festivalId, item.reminderType);
         }
         serverState = await getMobilePlanState();
-      } catch {
+      } catch (error) {
+        debugLogWarn({
+          type: 'planner_queue_replay_error',
+          scope: 'queue',
+          message: 'Queued planner replay item failed and will remain queued.',
+          meta: {
+            kind: item.kind,
+            festivalId: item.kind === 'festival' || item.kind === 'reminder' ? item.festivalId : undefined,
+            scheduleItemId: item.kind === 'scheduleItem' ? item.scheduleItemId : undefined,
+            error,
+          },
+        });
         remaining.push(item);
       }
     }
@@ -316,6 +429,25 @@ export async function replayQueuedPlannerMutations(queryClient: QueryClient): Pr
     await writeQueue(remaining);
     queryClient.setQueryData(['mobilePlanState'], serverState);
     queryClient.invalidateQueries({ queryKey: ['mobilePlanState'] });
+    const replayCompleteEvent = {
+      type: remaining.length > 0 ? 'planner_queue_replay_error' : 'planner_queue_replay_success',
+      scope: 'queue',
+      message:
+        remaining.length > 0
+          ? 'Queued planner replay completed with partial failures.'
+          : 'Queued planner replay completed successfully.',
+      meta: {
+        durationMs: Date.now() - startedAt,
+        replayedCount: queue.length - remaining.length,
+        remainingCount: remaining.length,
+        partial_failures: remaining.length,
+      },
+    } as const;
+    if (remaining.length > 0) {
+      debugLogWarn(replayCompleteEvent);
+    } else {
+      debugLogRare('planner_queue_replay_success', replayCompleteEvent);
+    }
   })().finally(() => {
     replayPromise = null;
   });

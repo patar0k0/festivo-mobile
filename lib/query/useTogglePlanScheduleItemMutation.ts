@@ -1,6 +1,7 @@
 import { type Query, type QueryKey, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { toggleScheduleItemInPlan, type MobilePlanStateDto } from '@/lib/api/mobilePlan';
+import { debugLogRare, debugLogWarn } from '@/lib/debug/mobileDiagnosticsHelpers';
 import {
   bumpPlannerMutationIntent,
   isLatestPlannerMutationIntent,
@@ -51,12 +52,17 @@ function patchAllMobilePlanQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   scheduleItemId: string,
   inPlan: boolean,
-): void {
+): number {
   const predicate = { predicate: isTargetQuery, type: 'all' as const };
+  let changedCount = 0;
   for (const [queryKey, data] of queryClient.getQueriesData(predicate)) {
     const next = patchMobilePlanSnapshotForItem(data as MobilePlanStateDto | undefined, scheduleItemId, inPlan);
-    if (next !== data) queryClient.setQueryData(queryKey, next);
+    if (next !== data) {
+      changedCount += 1;
+      queryClient.setQueryData(queryKey, next);
+    }
   }
+  return changedCount;
 }
 
 export function useTogglePlanScheduleItemMutation() {
@@ -80,7 +86,20 @@ export function useTogglePlanScheduleItemMutation() {
       const currentPlan = queryClient.getQueryData<MobilePlanStateDto>(['mobilePlanState']);
       const desiredInPlan = !currentPlan?.savedScheduleItemIds.includes(scheduleItemId);
 
-      patchAllMobilePlanQueries(queryClient, scheduleItemId, desiredInPlan);
+      const changedCount = patchAllMobilePlanQueries(queryClient, scheduleItemId, desiredInPlan);
+      if (changedCount > 0) {
+        debugLogRare(`planner_toggle_optimistic:schedule:${scheduleItemId}`, {
+          type: 'planner_toggle_optimistic',
+          scope: 'planner',
+          message: 'Schedule item planner toggle applied optimistically.',
+          meta: {
+            scheduleItemId,
+            desiredInPlan,
+            snapshotCount: snapshots.length,
+            changedCount,
+          },
+        }, 750);
+      }
 
       return { snapshots, scheduleItemId, desiredInPlan, intentSeq };
     },
@@ -96,6 +115,16 @@ export function useTogglePlanScheduleItemMutation() {
       for (const snapshot of context.snapshots) {
         queryClient.setQueryData(snapshot.queryKey, snapshot.data);
       }
+      debugLogWarn({
+        type: 'planner_toggle_rollback',
+        scope: 'planner',
+        message: 'Schedule item planner toggle rolled back.',
+        meta: {
+          scheduleItemId: variables.scheduleItemId,
+          desiredInPlan: context.desiredInPlan,
+          error,
+        },
+      });
     },
     onSuccess: (result, variables, context) => {
       if (!context) return;
@@ -106,6 +135,15 @@ export function useTogglePlanScheduleItemMutation() {
       queryClient.setQueryData(['mobilePlanState'], (data: MobilePlanStateDto | undefined) =>
         reconcileMobilePlanSnapshotItem(data, variables.scheduleItemId, serverInPlan),
       );
+      debugLogRare(`planner_toggle_reconcile:schedule:${variables.scheduleItemId}`, {
+        type: 'planner_toggle_reconcile',
+        scope: 'planner',
+        message: 'Schedule item planner toggle reconciled with server.',
+        meta: {
+          scheduleItemId: variables.scheduleItemId,
+          serverInPlan,
+        },
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['mobilePlanState'] });

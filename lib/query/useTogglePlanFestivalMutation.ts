@@ -4,6 +4,7 @@ import type { FollowFeedPage } from '@/lib/api/followFeed';
 import type { FestivalDetail, FestivalListItem } from '@/lib/api/festivals';
 import { removeFestivalFromPlan, saveFestivalToPlan, type MobilePlanStateDto } from '@/lib/api/mobilePlan';
 import type { OrganizerDetail } from '@/lib/api/organizers';
+import { debugLogRare, debugLogWarn } from '@/lib/debug/mobileDiagnosticsHelpers';
 import {
   bumpPlannerMutationIntent,
   isLatestPlannerMutationIntent,
@@ -159,9 +160,27 @@ export function useTogglePlanFestivalMutation() {
       });
       const nextSaved = !currentSaved;
 
+      let changedCount = 0;
       for (const { queryKey, data } of snapshots) {
         const next = patchAllQueries(queryKey, data, ref, nextSaved);
-        if (next !== data) queryClient.setQueryData(queryKey, next);
+        if (next !== data) {
+          changedCount += 1;
+          queryClient.setQueryData(queryKey, next);
+        }
+      }
+
+      if (changedCount > 0) {
+        debugLogRare(`planner_toggle_optimistic:festival:${ref.festivalId}`, {
+          type: 'planner_toggle_optimistic',
+          scope: 'planner',
+          message: 'Festival planner toggle applied optimistically.',
+          meta: {
+            festivalId: ref.festivalId,
+            nextSaved,
+            snapshotCount: snapshots.length,
+            changedCount,
+          },
+        }, 750);
       }
 
       return { snapshots, ref, nextSaved, intentSeq };
@@ -178,6 +197,16 @@ export function useTogglePlanFestivalMutation() {
       for (const snapshot of context.snapshots) {
         queryClient.setQueryData(snapshot.queryKey, snapshot.data);
       }
+      debugLogWarn({
+        type: 'planner_toggle_rollback',
+        scope: 'planner',
+        message: 'Festival planner toggle rolled back.',
+        meta: {
+          festivalId: context.ref.festivalId,
+          nextSaved: context.nextSaved,
+          error,
+        },
+      });
     },
     onSuccess: (result, _input, context) => {
       if (!context) return;
@@ -191,6 +220,15 @@ export function useTogglePlanFestivalMutation() {
           queryClient.setQueryData(queryKey, next);
         }
       }
+      debugLogRare(`planner_toggle_reconcile:festival:${context.ref.festivalId}`, {
+        type: 'planner_toggle_reconcile',
+        scope: 'planner',
+        message: 'Festival planner toggle reconciled with server.',
+        meta: {
+          festivalId: context.ref.festivalId,
+          serverSaved: nextSaved,
+        },
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['mobilePlanState'] });

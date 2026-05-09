@@ -32,8 +32,11 @@ import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 import { useTogglePlanFestivalMutation } from '@/lib/query/useTogglePlanFestivalMutation';
 import { useUpdatePlanReminderMutation } from '@/lib/query/useUpdatePlanReminderMutation';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
+if (
+  Platform.OS === 'android' &&
+  (global as typeof globalThis & { nativeFabricUIManager?: unknown }).nativeFabricUIManager == null
+) {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
 }
 
 type PlanGroupKey = 'this_weekend' | 'this_week' | 'upcoming' | 'later' | 'past';

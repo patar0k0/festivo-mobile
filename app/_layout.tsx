@@ -90,6 +90,7 @@ function RootStack() {
           }}
         />
         <Stack.Screen name="search" options={{ headerShown: false }} />
+        <Stack.Screen name="internal-debug" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen
           name="notification-fallback"

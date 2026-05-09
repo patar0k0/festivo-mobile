@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { type Href, useRouter } from 'expo-router';
+import { useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -27,6 +28,22 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout, loading } = useAuth();
+  const debugPressRef = useRef({ count: 0, firstAt: 0 });
+
+  const handleVersionLongPress = useCallback(() => {
+    const now = Date.now();
+    const current = debugPressRef.current;
+    if (!current.firstAt || now - current.firstAt > 5_000) {
+      current.count = 0;
+      current.firstAt = now;
+    }
+    current.count += 1;
+    if (current.count >= 5) {
+      current.count = 0;
+      current.firstAt = 0;
+      router.push('/internal-debug' as Href);
+    }
+  }, [router]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}>
@@ -58,6 +75,8 @@ export default function ProfileScreen() {
                 router.push(navigateTo as Href);
               }
             }}
+            onLongPress={row.key === 'version' ? handleVersionLongPress : undefined}
+            delayLongPress={700}
             style={({ pressed }) => [
               styles.settingsRow,
               index < SETTINGS_ROWS.length - 1 && styles.settingsRowBorder,
