@@ -36,6 +36,10 @@ export type FollowFeedPage = {
   has_more: boolean;
 };
 
+function notNull<T>(value: T | null): value is T {
+  return value != null;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
@@ -76,8 +80,8 @@ export async function getFollowFeed(cursor?: string | null, limit = 12): Promise
   const rawItems = Array.isArray(body.items) ? body.items : [];
   const rawOrganizers = Array.isArray(body.organizers) ? body.organizers : [];
 
-  const items: FollowFeedItem[] = rawItems
-    .map((raw) => {
+  const items = rawItems
+    .map<FollowFeedItem | null>((raw) => {
       const rec = asRecord(raw);
       if (!rec) return null;
       const activity_type = rec.activity_type;
@@ -124,21 +128,23 @@ export async function getFollowFeed(cursor?: string | null, limit = 12): Promise
           : undefined,
       } satisfies FollowFeedItem;
     })
-    .filter((x): x is FollowFeedItem => x != null && x.festival != null);
+    .filter((item): item is FollowFeedItem => item != null && item.festival != null);
 
-  const organizers: FollowFeedOrganizerGroup[] = rawOrganizers
-    .map((raw) => {
+  const organizers = rawOrganizers
+    .map<FollowFeedOrganizerGroup | null>((raw) => {
       const rec = asRecord(raw);
       if (!rec) return null;
+      const organizerId = String(rec.organizer_id ?? "").trim();
+      if (!organizerId) return null;
       return {
-        organizer_id: String(rec.organizer_id ?? ""),
+        organizer_id: organizerId,
         organizer_slug: typeof rec.organizer_slug === "string" ? rec.organizer_slug : null,
         organizer_name: typeof rec.organizer_name === "string" ? rec.organizer_name : null,
         follower_count: typeof rec.follower_count === "number" ? rec.follower_count : 0,
         item_count: typeof rec.item_count === "number" ? rec.item_count : 0,
       };
     })
-    .filter((x): x is FollowFeedOrganizerGroup => x != null);
+    .filter(notNull);
 
   return {
     items,

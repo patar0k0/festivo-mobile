@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 
 export default function TabsGroupLayout() {
+  useMobilePlanState();
   return (
     <Tabs
       screenOptions={{
@@ -46,12 +48,18 @@ export default function TabsGroupLayout() {
         }}
       />
       <Tabs.Screen
-        name="saved"
+        name="plan"
         options={{
-          title: 'Запазени',
+          title: 'Моят план',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name="bookmark-outline" size={focused ? 24 : 22} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="saved"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen

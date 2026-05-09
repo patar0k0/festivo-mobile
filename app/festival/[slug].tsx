@@ -50,7 +50,6 @@ const HERO_H = Platform.OS === 'android' ? 268 : 300;
 const GALLERY_INITIAL_LIMIT = 4;
 const DESC_COLLAPSED_LINES = 6;
 const DESC_READ_MORE_MIN_CHARS = 200;
-const SAVE_PENDING_MS = 25000;
 const SCROLL_BOTTOM_EXTRA = 28;
 
 const HERO_PALETTE = ['#4F46E5', '#0EA5E9', '#059669', '#D97706', '#7C3AED', '#DB2777'];
@@ -271,8 +270,6 @@ export default function FestivalDetailScreen() {
   const galleryFade = useRef(new Animated.Value(0)).current;
   const lightboxOpenIntentRef = useRef(false);
   const lightboxAnimTokenRef = useRef(0);
-  const saveInFlightRef = useRef(false);
-  const pendingClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['festival', slug],
@@ -319,14 +316,6 @@ export default function FestivalDetailScreen() {
 
   const stickyBottomReserve = FESTIVAL_STICKY_BAR_OFFSET + Math.max(insets.bottom, 10) + SCROLL_BOTTOM_EXTRA;
 
-  useEffect(() => {
-    return () => {
-      if (pendingClearTimeoutRef.current) {
-        clearTimeout(pendingClearTimeoutRef.current);
-      }
-    };
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
       return () => {
@@ -339,19 +328,6 @@ export default function FestivalDetailScreen() {
       };
     }, [galleryFade]),
   );
-
-  const clearSavePending = useCallback((festivalId: string) => {
-    saveInFlightRef.current = false;
-    if (pendingClearTimeoutRef.current) {
-      clearTimeout(pendingClearTimeoutRef.current);
-      pendingClearTimeoutRef.current = null;
-    }
-    setPendingIds((prev) => {
-      const next = new Set(prev);
-      next.delete(festivalId);
-      return next;
-    });
-  }, []);
 
   const toggleDescriptionExpanded = useCallback(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -403,18 +379,7 @@ export default function FestivalDetailScreen() {
   const onToggleSave = useCallback(
     (festival: FestivalDetail) => {
       const id = festival.festivalId;
-      if (saveInFlightRef.current) {
-        return;
-      }
-      saveInFlightRef.current = true;
       setPendingIds((prev) => new Set(prev).add(id));
-      if (pendingClearTimeoutRef.current) {
-        clearTimeout(pendingClearTimeoutRef.current);
-      }
-      pendingClearTimeoutRef.current = setTimeout(() => {
-        clearSavePending(id);
-      }, SAVE_PENDING_MS);
-
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       toggleSavedMutation.mutate(
         {
@@ -424,12 +389,16 @@ export default function FestivalDetailScreen() {
         },
         {
           onSettled: () => {
-            clearSavePending(id);
+            setPendingIds((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
           },
         },
       );
     },
-    [toggleSavedMutation, clearSavePending],
+    [toggleSavedMutation],
   );
 
   const bookmarkTop = insets.top + 10;

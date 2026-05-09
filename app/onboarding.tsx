@@ -564,7 +564,7 @@ export default function OnboardingScreen() {
                       onPress={() => toggleArray('organizerIds', organizer.id)}
                       style={[styles.organizerCard, selected && styles.organizerCardActive]}
                       accessibilityRole="button"
-                      accessibilityLabel={`Следвай ${organizer.label}`}>
+                      accessibilityLabel={`Следвай ${organizer.name}`}>
                       <View style={styles.organizerTop}>
                         <View style={styles.logoWrap}>
                           {organizer.logo_url ? (
@@ -702,6 +702,23 @@ const styles = StyleSheet.create({
   whyText: { fontSize: 12, color: '#475569' },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tag: { fontSize: 11, color: '#334155', backgroundColor: '#E2E8F0', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, overflow: 'hidden' },
+  retryBox: {
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    gap: 8,
+  },
+  retryText: { fontSize: 13, color: '#7F1D1D', lineHeight: 18 },
+  retryBtn: {
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    backgroundColor: '#B91C1C',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  retryBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
   footer: {
     position: 'absolute',
     left: 0,

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -71,6 +71,7 @@ function SearchResultsSkeleton() {
 
 export default function SearchScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ q?: string }>();
   const insets = useSafeAreaInsets();
   const toggleSavedMutation = useToggleSavedMutation();
   const [input, setInput] = useState('');
@@ -78,6 +79,16 @@ export default function SearchScreen() {
   const [recentTerms, setRecentTerms] = useState<string[]>([]);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const lastPersistedQuery = useRef<string | null>(null);
+
+  useEffect(() => {
+    const raw = params.q;
+    const q = Array.isArray(raw) ? raw[0] : raw;
+    if (!q || typeof q !== 'string') return;
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    setInput(trimmed);
+    setDebounced(trimmed);
+  }, [params.q]);
 
   useEffect(() => {
     const t = setTimeout(() => {
