@@ -13,8 +13,22 @@ export type MobilePlanStatsDto = {
   upcomingCount: number;
 };
 
+export type SavedFestivalBasicDto = {
+  festivalId: string;
+  slug: string;
+  title: string;
+  city: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  image_url: string | null;
+  category: string | null;
+  is_verified: boolean;
+  organizer_name: string | null;
+};
+
 export type MobilePlanStateDto = {
   savedFestivalIds: string[];
+  savedFestivals: SavedFestivalBasicDto[];
   savedScheduleItemIds: string[];
   reminders: Record<string, MobilePlanReminderDto>;
   stats: MobilePlanStatsDto;
@@ -68,10 +82,30 @@ function parsePlanState(body: unknown): MobilePlanStateDto {
     };
   }
   const statsRaw = asRecord(rec?.stats);
+  const savedFestivals: SavedFestivalBasicDto[] = Array.isArray(rec?.savedFestivals)
+    ? (rec.savedFestivals as unknown[]).flatMap((item) => {
+        const f = asRecord(item);
+        if (!f?.festivalId || !f?.slug) return [];
+        return [{
+          festivalId: String(f.festivalId),
+          slug: String(f.slug),
+          title: typeof f.title === 'string' ? f.title : '',
+          city: typeof f.city === 'string' ? f.city : null,
+          start_date: typeof f.start_date === 'string' ? f.start_date : null,
+          end_date: typeof f.end_date === 'string' ? f.end_date : null,
+          image_url: typeof f.image_url === 'string' ? f.image_url : null,
+          category: typeof f.category === 'string' ? f.category : null,
+          is_verified: Boolean(f.is_verified),
+          organizer_name: typeof f.organizer_name === 'string' ? f.organizer_name : null,
+        }];
+      })
+    : [];
+
   return {
     savedFestivalIds: Array.isArray(rec?.savedFestivalIds)
       ? rec.savedFestivalIds.map((x) => String(x)).filter(Boolean)
       : [],
+    savedFestivals,
     savedScheduleItemIds: Array.isArray(rec?.savedScheduleItemIds)
       ? rec.savedScheduleItemIds.map((x) => String(x)).filter(Boolean)
       : [],
