@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo } from 'react';
 import { AppState } from 'react-native';
 
@@ -58,6 +58,7 @@ export function useMobilePlanState() {
     queryFn: ({ signal }) => getMobilePlanState(signal),
     staleTime: 30_000,
     refetchOnReconnect: true,
+    placeholderData: keepPreviousData,
   });
 
   const savedFestivalIds = useMemo(() => query.data?.savedFestivalIds ?? [], [query.data?.savedFestivalIds]);
@@ -87,20 +88,26 @@ export function useMobilePlanState() {
     [savedScheduleItemIdSet],
   );
 
+  const savedFestivalSyncKey = useMemo(
+    () => [...savedFestivalIds].sort().join('|'),
+    [savedFestivalIds],
+  );
+
   useEffect(() => {
     void hydrateQueuedPlannerMutations(queryClient);
     void replayQueuedPlannerMutations(queryClient);
   }, [queryClient]);
 
   useEffect(() => {
-    if (!query.data) return;
-    const savedSet = new Set(query.data.savedFestivalIds);
+    const plan = queryClient.getQueryData<MobilePlanStateDto>(['mobilePlanState']);
+    if (!plan) return;
+    const savedSet = new Set(plan.savedFestivalIds);
     for (const [queryKey, data] of queryClient.getQueriesData({ type: 'all' })) {
       if (!Array.isArray(queryKey) || queryKey.length === 0) continue;
       const root = String(queryKey[0] ?? '');
       let next = data;
       if (root === 'festivals' || root === 'search') {
-        next = query.data.savedFestivalIds.reduce((acc, id) => {
+        next = plan.savedFestivalIds.reduce((acc, id) => {
           const shouldSave = savedSet.has(id);
           return updateFestivalSavedStateInCache(acc, { festivalId: id }, shouldSave);
         }, data);
@@ -115,7 +122,7 @@ export function useMobilePlanState() {
         queryClient.setQueryData(queryKey, next);
       }
     }
-  }, [query.data, queryClient]);
+  }, [savedFestivalSyncKey, queryClient]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
@@ -127,6 +134,9 @@ export function useMobilePlanState() {
       if (state?.fetchStatus === 'fetching') return;
       void replayQueuedPlannerMutations(queryClient);
       queryClient.invalidateQueries({ queryKey: ['mobilePlanState'] });
+      if (staleFor > 45_000) {
+        queryClient.invalidateQueries({ queryKey: ['feed', 'personalized'] });
+      }
     });
     return () => sub.remove();
   }, [queryClient]);

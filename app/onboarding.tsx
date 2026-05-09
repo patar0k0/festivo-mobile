@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import Animated, {
@@ -32,7 +33,13 @@ import {
   type OnboardingOrganizerSuggestion,
   type OnboardingSuggestionsResponse,
 } from '@/lib/api/onboardingSuggestions';
-
+import {
+  mergeOnboardingCategorySuggestions,
+  normalizeCategoryLabelKey,
+  resolveCanonicalCategorySlug,
+  type MergedCategorySuggestion,
+} from '@/lib/personalization/onboardingCategoryNormalize';
+import { prepareOnboardingOrganizerSuggestions } from '@/lib/personalization/onboardingOrganizersNormalize';
 import {
   EMPTY_ONBOARDING_DRAFT,
   getOnboardingDraft,
@@ -87,6 +94,7 @@ function AnimatedChip({
   badge,
   onPress,
   accessibilityLabel,
+  compact,
 }: {
   label: string;
   selected: boolean;
@@ -95,6 +103,7 @@ function AnimatedChip({
   badge?: string;
   onPress: () => void;
   accessibilityLabel: string;
+  compact?: boolean;
 }) {
   const pressScale = useSharedValue(1);
   useEffect(() => {
@@ -108,16 +117,29 @@ function AnimatedChip({
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
+        accessibilityState={{ selected }}
         accessibilityLabel={accessibilityLabel}
-        style={[styles.richChip, selected && styles.richChipActive]}>
+        style={[
+          styles.richChip,
+          compact && styles.richChipCompact,
+          selected && styles.richChipActive,
+        ]}>
         <View style={styles.chipTitleRow}>
-          <Text style={[styles.richChipTitle, selected && styles.richChipTitleActive]}>
+          <Text
+            style={[styles.richChipTitle, compact && styles.richChipTitleCompact, selected && styles.richChipTitleActive]}
+            numberOfLines={compact ? 3 : undefined}>
             {emoji ? `${emoji} ` : ''}
             {label}
           </Text>
           {badge ? <Text style={[styles.chipBadge, selected && styles.chipBadgeActive]}>{badge}</Text> : null}
         </View>
-        {subtitle ? <Text style={[styles.richChipSub, selected && styles.richChipSubActive]}>{subtitle}</Text> : null}
+        {subtitle ? (
+          <Text
+            style={[styles.richChipSub, compact && styles.richChipSubCompact, selected && styles.richChipSubActive]}
+            numberOfLines={compact ? 2 : undefined}>
+            {subtitle}
+          </Text>
+        ) : null}
       </Pressable>
     </Animated.View>
   );
@@ -154,6 +176,7 @@ function ToggleChips({
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<OnboardingDraft>(EMPTY_ONBOARDING_DRAFT);
   const [hydrated, setHydrated] = useState(false);
@@ -255,36 +278,61 @@ export default function OnboardingScreen() {
         return 'Подбрали сме профили според твоите интереси.';
     }
   }, [step]);
-  const categorySuggestions: OnboardingCategorySuggestion[] = suggestions?.categories ?? [];
-  const citySuggestions: OnboardingCitySuggestion[] = suggestions?.cities ?? [];
-  const organizerSuggestions: OnboardingOrganizerSuggestion[] = suggestions?.organizers ?? [];
+  const categorySuggestions = useMemo(
+    (): OnboardingCategorySuggestion[] => suggestions?.categories ?? [],
+    [suggestions],
+  );
+  const citySuggestions = useMemo((): OnboardingCitySuggestion[] => suggestions?.cities ?? [], [suggestions]);
+  const organizerSuggestionsRaw = useMemo(
+    (): OnboardingOrganizerSuggestion[] => suggestions?.organizers ?? [],
+    [suggestions],
+  );
+
+  const mergedCategories = useMemo(
+    () => mergeOnboardingCategorySuggestions(categorySuggestions),
+    [categorySuggestions],
+  );
+
+  const organizerSuggestions = useMemo(
+    () => prepareOnboardingOrganizerSuggestions(organizerSuggestionsRaw),
+    [organizerSuggestionsRaw],
+  );
 
   const categoryOptions = useMemo(() => {
-    const merged = new Set<string>(categorySuggestions.map((x) => x.slug));
-    for (const selected of draft.categories) merged.add(selected);
-    return [...merged];
-  }, [categorySuggestions, draft.categories]);
+    const slugs = new Set<string>(mergedCategories.map((m) => m.slug));
+    for (const raw of draft.categories) {
+      slugs.add(resolveCanonicalCategorySlug(raw, mergedCategories));
+    }
+    const labelFor = (slug: string) =>
+      mergedCategories.find((m) => m.slug === slug)?.label_bg ?? CATEGORY_META[slug]?.label ?? slug;
+    return [...slugs].sort((a, b) => labelFor(a).localeCompare(labelFor(b), 'bg'));
+  }, [mergedCategories, draft.categories]);
+
   const categoryLabelBySlug = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const category of categorySuggestions) {
-      map[category.slug] = category.label_bg;
+    for (const m of mergedCategories) {
+      map[m.slug] = m.label_bg;
+      for (const s of m.mergedSlugs) map[s] = m.label_bg;
     }
     for (const slug of draft.categories) {
       if (!map[slug]) map[slug] = CATEGORY_META[slug]?.label ?? slug;
     }
     return map;
-  }, [categorySuggestions, draft.categories]);
+  }, [mergedCategories, draft.categories]);
+
   const categoryEmojiBySlug = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const category of categorySuggestions) {
-      const fromIcon = category.icon ? ICON_TO_EMOJI[category.icon] : undefined;
-      map[category.slug] = fromIcon ?? CATEGORY_META[category.slug]?.emoji ?? '🎉';
+    for (const m of mergedCategories) {
+      const fromIcon = m.icon ? ICON_TO_EMOJI[m.icon] : undefined;
+      const emoji = fromIcon ?? CATEGORY_META[m.slug]?.emoji ?? '🎉';
+      map[m.slug] = emoji;
+      for (const s of m.mergedSlugs) map[s] = emoji;
     }
     for (const slug of draft.categories) {
       if (!map[slug]) map[slug] = CATEGORY_META[slug]?.emoji ?? '🎉';
     }
     return map;
-  }, [categorySuggestions, draft.categories]);
+  }, [mergedCategories, draft.categories]);
 
   const cityOptions = useMemo(() => {
     const merged = new Set<string>(citySuggestions.map((x) => x.slug));
@@ -313,6 +361,34 @@ export default function OnboardingScreen() {
     else set.add(value);
     void persist({ ...draft, [key]: [...set] });
   };
+
+  const toggleMergedCategory = (row: MergedCategorySuggestion) => {
+    const set = new Set(draft.categories);
+    const on = row.mergedSlugs.some((s) => set.has(s)) || set.has(row.slug);
+    if (on) {
+      for (const s of row.mergedSlugs) set.delete(s);
+      set.delete(row.slug);
+    } else {
+      for (const s of row.mergedSlugs) set.delete(s);
+      set.add(row.slug);
+    }
+    void persist({ ...draft, categories: [...set] });
+  };
+
+  const isMergedCategorySelected = (canonicalSlug: string) => {
+    const row = mergedCategories.find((m) => m.slug === canonicalSlug);
+    if (!row) return draft.categories.includes(canonicalSlug);
+    return row.mergedSlugs.some((s) => draft.categories.includes(s)) || draft.categories.includes(row.slug);
+  };
+
+  const onCategoryChipPress = (canonicalSlug: string) => {
+    const row = mergedCategories.find((m) => m.slug === canonicalSlug);
+    if (row) toggleMergedCategory(row);
+    else toggleArray('categories', canonicalSlug);
+  };
+
+  const categoryGridInnerWidth = Math.max(0, windowWidth - 40 - 36);
+  const categoryChipMinWidth = Math.min(152, categoryGridInnerWidth * 0.46);
 
   const goNext = () => {
     const nextStep = Math.min(4, step + 1);
@@ -433,25 +509,37 @@ export default function OnboardingScreen() {
             <>
               <Text style={styles.guidance}>Избери поне 2 категории за по-точни препоръки.</Text>
               {suggestionsLoading && categoryOptions.length === 0 ? (
-                <View style={styles.chipsGrid}>
+                <View style={styles.chipsGridTwoCol}>
                   {[0, 1, 2, 3].map((idx) => (
-                    <Skeleton key={`cat-sk-${idx}`} height={56} radius={16} />
+                    <View
+                      key={`cat-sk-${idx}`}
+                      style={[styles.chipGridCell, { minWidth: categoryChipMinWidth, flexGrow: 1 }]}>
+                      <Skeleton height={76} radius={14} />
+                    </View>
                   ))}
                 </View>
               ) : (
-                <View style={styles.chipsGrid}>
-                  {categoryOptions.map((value) => (
-                    <AnimatedChip
-                      key={value}
-                      emoji={categoryEmojiBySlug[value] ?? CATEGORY_META[value]?.emoji}
-                      label={categoryLabelBySlug[value] ?? CATEGORY_META[value]?.label ?? value}
-                      subtitle={CATEGORY_META[value]?.hint}
-                      selected={draft.categories.includes(value)}
-                      onPress={() => toggleArray('categories', value)}
-                      accessibilityLabel={categoryLabelBySlug[value] ?? value}
-                      badge={draft.categories.includes(value) ? 'Избрано' : undefined}
-                    />
-                  ))}
+                <View style={styles.chipsGridTwoCol}>
+                  {categoryOptions.map((value) => {
+                    const selected = isMergedCategorySelected(value);
+                    const label = categoryLabelBySlug[value] ?? CATEGORY_META[value]?.label ?? value;
+                    return (
+                      <View
+                        key={value}
+                        style={[styles.chipGridCell, { minWidth: categoryChipMinWidth, flexGrow: 1 }]}>
+                        <AnimatedChip
+                          compact
+                          emoji={categoryEmojiBySlug[value] ?? CATEGORY_META[value]?.emoji}
+                          label={label}
+                          subtitle={CATEGORY_META[value]?.hint}
+                          selected={selected}
+                          onPress={() => onCategoryChipPress(value)}
+                          accessibilityLabel={label}
+                          badge={selected ? 'Избрано' : undefined}
+                        />
+                      </View>
+                    );
+                  })}
                 </View>
               )}
             </>
@@ -538,8 +626,8 @@ export default function OnboardingScreen() {
               {suggestionsLoading && organizerSuggestions.length === 0
                 ? [0, 1, 2].map((idx) => (
                     <View key={`org-sk-${idx}`} style={styles.organizerCard}>
-                      <View style={styles.organizerTop}>
-                        <Skeleton width={42} height={42} radius={21} />
+                      <View style={styles.organizerHeroRow}>
+                        <Skeleton width={52} height={52} radius={14} />
                         <View style={{ flex: 1, gap: 6 }}>
                           <Skeleton width="60%" height={14} />
                           <Skeleton width="45%" height={12} />
@@ -554,49 +642,92 @@ export default function OnboardingScreen() {
                     </View>
                   ))
                 : organizerSuggestions.map((organizer) => {
-                const selected = draft.organizerIds.includes(organizer.id);
-                const categories = organizer.categories.slice(0, 3);
-                const followers = typeof organizer.followers_count === 'number' ? organizer.followers_count : null;
-                const upcoming = typeof organizer.upcoming_festival_count === 'number' ? organizer.upcoming_festival_count : null;
-                return (
-                  <Animated.View key={organizer.id} layout={LinearTransition.springify()}>
-                    <Pressable
-                      onPress={() => toggleArray('organizerIds', organizer.id)}
-                      style={[styles.organizerCard, selected && styles.organizerCardActive]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Следвай ${organizer.name}`}>
-                      <View style={styles.organizerTop}>
-                        <View style={styles.logoWrap}>
-                          {organizer.logo_url ? (
-                            <ExpoImage source={{ uri: organizer.logo_url }} style={styles.logo} contentFit="cover" />
-                          ) : (
-                            <Text style={styles.logoFallback}>{organizer.name.slice(0, 1)}</Text>
-                          )}
-                        </View>
-                        <View style={styles.organizerText}>
-                          <Text style={styles.organizerName}>
-                            {organizer.name} {organizer.verified ? '✓' : ''}
-                          </Text>
-                          <Text style={styles.organizerMeta}>
-                            {organizer.city ? `📍 ${organizer.city}` : 'Организатор'}
-                            {followers != null ? ` • ${followers} последователи` : ''}
-                          </Text>
-                        </View>
-                        <Text style={[styles.followBadge, selected && styles.followBadgeActive]}>{selected ? 'Следваш' : 'Следвай'}</Text>
-                      </View>
-                      <Text style={styles.whyText}>Защо е предложено: {organizer.explanation}</Text>
-                      {upcoming != null ? <Text style={styles.whyText}>Предстоящи събития: {upcoming}</Text> : null}
-                      <View style={styles.tagRow}>
-                        {categories.map((tag) => (
-                          <Text key={`${organizer.id}-${tag}`} style={styles.tag}>
-                            {tag}
-                          </Text>
-                        ))}
-                      </View>
-                    </Pressable>
-                  </Animated.View>
-                );
-              })}
+                    const selected = draft.organizerIds.includes(organizer.id);
+                    const seenTag = new Set<string>();
+                    const categoryTags = organizer.categories
+                      .map((t) => t.trim())
+                      .filter((t) => {
+                        if (!t) return false;
+                        const k = normalizeCategoryLabelKey(t);
+                        if (seenTag.has(k)) return false;
+                        seenTag.add(k);
+                        return true;
+                      })
+                      .slice(0, 4);
+                    const followersRaw = organizer.followers_count;
+                    const showFollowers = typeof followersRaw === 'number' && followersRaw > 0;
+                    const upcomingRaw = organizer.upcoming_festival_count;
+                    const showUpcoming = typeof upcomingRaw === 'number' && upcomingRaw > 0;
+                    return (
+                      <Animated.View key={organizer.id} layout={LinearTransition.springify()}>
+                        <Pressable
+                          onPress={() => toggleArray('organizerIds', organizer.id)}
+                          style={[styles.organizerCard, selected && styles.organizerCardActive]}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={`Следвай ${organizer.name}`}>
+                          <View style={styles.organizerHeroRow}>
+                            <View style={styles.logoWrap}>
+                              {organizer.logo_url ? (
+                                <ExpoImage
+                                  source={{ uri: organizer.logo_url }}
+                                  style={styles.logo}
+                                  contentFit="cover"
+                                />
+                              ) : (
+                                <Text style={styles.logoFallback}>{organizer.name.slice(0, 1).toUpperCase()}</Text>
+                              )}
+                            </View>
+                            <View style={styles.organizerText}>
+                              <Text style={styles.organizerName} numberOfLines={2}>
+                                {organizer.name}
+                                {organizer.verified ? ' ✓' : ''}
+                              </Text>
+                              <View style={styles.organizerMetaRow}>
+                                {organizer.city ? (
+                                  <Text style={styles.organizerMeta} numberOfLines={1}>
+                                    📍 {organizer.city}
+                                  </Text>
+                                ) : (
+                                  <Text style={styles.organizerMeta}>Организатор</Text>
+                                )}
+                                {showFollowers ? (
+                                  <Text style={styles.organizerMetaMuted} numberOfLines={1}>
+                                    {followersRaw!.toLocaleString('bg-BG')} последователи
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </View>
+                            <View style={[styles.ctaBadge, selected && styles.ctaBadgeActive]}>
+                              <Text style={[styles.ctaBadgeText, selected && styles.ctaBadgeTextActive]}>
+                                {selected ? 'Следваш' : 'Следвай'}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.whyBox}>
+                            <Text style={styles.whyLabel}>Защо го предлагаме</Text>
+                            <Text style={styles.whyBody}>{organizer.explanation}</Text>
+                          </View>
+                          {showUpcoming ? (
+                            <Text style={styles.upcomingLine}>
+                              Предстоящи фестивали: {upcomingRaw!.toLocaleString('bg-BG')}
+                            </Text>
+                          ) : null}
+                          {categoryTags.length > 0 ? (
+                            <View style={styles.tagRow}>
+                              {categoryTags.map((tag) => (
+                                <View key={`${organizer.id}-${normalizeCategoryLabelKey(tag)}`} style={styles.tagPill}>
+                                  <Text style={styles.tagPillText} numberOfLines={1}>
+                                    {tag}
+                                  </Text>
+                                </View>
+                              ))}
+                            </View>
+                          ) : null}
+                        </Pressable>
+                      </Animated.View>
+                    );
+                  })}
             </View>
           ) : null}
         </Animated.View>
@@ -637,15 +768,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 18,
-    gap: 12,
+    padding: 16,
+    gap: 10,
   },
   title: { fontSize: 28, fontWeight: '800', color: '#0F172A', lineHeight: 33 },
   subtitle: { fontSize: 15, color: '#475569', lineHeight: 22 },
   guidance: { fontSize: 13, color: '#475569', fontWeight: '600' },
-  chipsGrid: { gap: 10 },
+  chipsGrid: { gap: 8 },
+  chipsGridTwoCol: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, rowGap: 8, justifyContent: 'flex-start' },
+  chipGridCell: { flexGrow: 1, maxWidth: '100%' },
   richChip: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#CBD5E1',
     paddingHorizontal: 12,
@@ -653,11 +786,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     gap: 4,
   },
-  richChipActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
+  richChipCompact: { paddingVertical: 8, paddingHorizontal: 10, minHeight: 72, justifyContent: 'center' },
+  richChipActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+    borderWidth: 2,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
   chipTitleRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'center' },
   richChipTitle: { fontSize: 14, color: '#0F172A', fontWeight: '700', flexShrink: 1 },
+  richChipTitleCompact: { fontSize: 13, lineHeight: 18 },
   richChipTitleActive: { color: '#FFFFFF' },
   richChipSub: { fontSize: 12, color: '#64748B' },
+  richChipSubCompact: { fontSize: 11, lineHeight: 15 },
   richChipSubActive: { color: '#CBD5E1' },
   chipBadge: { fontSize: 11, color: '#334155', fontWeight: '700', backgroundColor: '#E2E8F0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   chipBadgeActive: { color: '#0F172A', backgroundColor: '#F8FAFC' },
@@ -680,7 +825,7 @@ const styles = StyleSheet.create({
   locationTrust: { color: '#475569', fontSize: 13, lineHeight: 19 },
   permissionBtn: { borderRadius: 12, backgroundColor: '#0F172A', alignItems: 'center', paddingVertical: 11 },
   permissionBtnText: { color: '#FFFFFF', fontWeight: '700' },
-  organizerList: { gap: 10 },
+  organizerList: { gap: 8 },
   organizerCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -689,19 +834,58 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
-  organizerCardActive: { borderColor: '#0F172A', backgroundColor: '#F8FAFC' },
-  organizerTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  logoWrap: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#E2E8F0', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  logo: { width: 42, height: 42 },
-  logoFallback: { color: '#334155', fontSize: 16, fontWeight: '800' },
-  organizerText: { flex: 1, gap: 2 },
-  organizerName: { fontWeight: '700', color: '#0F172A', fontSize: 14 },
-  organizerMeta: { color: '#64748B', fontSize: 12 },
-  followBadge: { fontSize: 12, color: '#334155', fontWeight: '700', backgroundColor: '#E2E8F0', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  followBadgeActive: { backgroundColor: '#0F172A', color: '#FFFFFF' },
-  whyText: { fontSize: 12, color: '#475569' },
+  organizerCardActive: { borderColor: '#0F172A', backgroundColor: '#F1F5F9' },
+  organizerHeroRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  logoWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logo: { width: 52, height: 52 },
+  logoFallback: { color: '#334155', fontSize: 18, fontWeight: '800' },
+  organizerText: { flex: 1, minWidth: 0, gap: 4 },
+  organizerName: { fontWeight: '800', color: '#0F172A', fontSize: 15, lineHeight: 20 },
+  organizerMetaRow: { gap: 4 },
+  organizerMeta: { color: '#64748B', fontSize: 12, fontWeight: '600' },
+  organizerMetaMuted: { color: '#94A3B8', fontSize: 11, fontWeight: '600' },
+  ctaBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 2,
+    borderRadius: 999,
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  ctaBadgeActive: { backgroundColor: '#334155' },
+  ctaBadgeText: { fontSize: 12, color: '#FFFFFF', fontWeight: '800' },
+  ctaBadgeTextActive: { color: '#FFFFFF' },
+  whyBox: {
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  whyLabel: { fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.4 },
+  whyBody: { fontSize: 13, color: '#334155', lineHeight: 18 },
+  upcomingLine: { fontSize: 12, color: '#475569', fontWeight: '600' },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  tag: { fontSize: 11, color: '#334155', backgroundColor: '#E2E8F0', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, overflow: 'hidden' },
+  tagPill: {
+    maxWidth: '100%',
+    borderRadius: 999,
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  tagPillText: { fontSize: 11, color: '#3730A3', fontWeight: '700' },
   retryBox: {
     borderWidth: 1,
     borderColor: '#FCA5A5',

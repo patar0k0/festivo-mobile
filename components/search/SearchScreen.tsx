@@ -171,7 +171,7 @@ export default function SearchScreen() {
       }
       router.push(`/festival/${item.slug}`);
     },
-    [router, queryClient],
+    [router],
   );
 
   const onSave = useCallback(

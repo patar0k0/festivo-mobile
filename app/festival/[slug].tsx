@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import * as Linking from 'expo-linking';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FestivalDetailStickyBar, FESTIVAL_STICKY_BAR_OFFSET } from '@/components/festival/FestivalDetailStickyBar';
 import { FestivalMapPreview } from '@/components/festival/FestivalMapPreview';
+import { FestivalScheduleSectionList } from '@/components/festival/FestivalScheduleSectionList';
 import { VerifiedBadge } from '@/components/organizer/VerifiedBadge';
 import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
 import { PressableScale } from '@/components/ui/PressableScale';
@@ -39,7 +40,7 @@ import { formatDateRangeRelative } from '@/lib/festival/relativeDate';
 import { buildLocationQuery, openInMaps } from '@/lib/map/openInMaps';
 import { isValidCoordinatePair, looksLikeBulgaria } from '@/lib/map/coordinates';
 import { trackRecentlyViewedFestival } from '@/lib/personalization/recentlyViewed';
-import { groupFestivalSchedule, formatScheduleTime, pickInitialScheduleDayIndex } from '@/lib/plan/schedule';
+import { groupFestivalSchedule } from '@/lib/plan/schedule';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 import { useTogglePlanScheduleItemMutation } from '@/lib/query/useTogglePlanScheduleItemMutation';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
@@ -260,152 +261,16 @@ const QuickTile = memo(function QuickTile({
   );
 });
 
-const ScheduleTimelineSection = memo(function ScheduleTimelineSection({ detail }: { detail: FestivalDetail }) {
-  const groupedDays = useMemo(() => groupFestivalSchedule(detail), [detail]);
-  const initialDayIndex = useMemo(() => pickInitialScheduleDayIndex(groupedDays), [groupedDays]);
-  const [activeDayIndex, setActiveDayIndex] = useState(initialDayIndex);
-  const planQuery = useMobilePlanState();
-  const toggleScheduleItemMutation = useTogglePlanScheduleItemMutation();
-  const [pendingItemIds, setPendingItemIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    setActiveDayIndex(initialDayIndex);
-  }, [initialDayIndex]);
-
-  const activeDay = groupedDays[Math.min(activeDayIndex, Math.max(0, groupedDays.length - 1))];
-  const plannedInFestival = useMemo(() => {
-    if (!groupedDays.length) return 0;
-    return groupedDays.reduce(
-      (count, day) => count + day.items.filter((item) => planQuery.isScheduleItemPlanned(item.id)).length,
-      0,
-    );
-  }, [groupedDays, planQuery]);
-
-  if (!groupedDays.length || !activeDay) return null;
-
-  return (
-    <Reanimated.View style={styles.scheduleSection} entering={FadeInDown.duration(260).delay(180)}>
-      <View style={styles.scheduleHeaderRow}>
-        <View>
-          <Text style={styles.sectionHeading}>Програма</Text>
-          <Text style={styles.scheduleHint}>
-            {plannedInFestival > 0
-              ? `${plannedInFestival} точки са в плана ти`
-              : 'Добавяй отделни точки към личния си план.'}
-          </Text>
-        </View>
-        <View style={styles.scheduleCountPill}>
-          <Ionicons name="list-outline" size={14} color="#4F46E5" />
-          <Text style={styles.scheduleCountText}>{detail.schedule_items?.length ?? 0}</Text>
-        </View>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.daySelector}
-        keyboardShouldPersistTaps="handled">
-        {groupedDays.map((day, index) => {
-          const active = index === activeDayIndex;
-          const plannedCount = day.items.filter((item) => planQuery.isScheduleItemPlanned(item.id)).length;
-          return (
-            <Pressable
-              key={day.id}
-              onPress={() => {
-                setActiveDayIndex(index);
-                void Haptics.selectionAsync();
-              }}
-              style={({ pressed }) => [
-                styles.dayChip,
-                active && styles.dayChipActive,
-                pressed && styles.dayChipPressed,
-              ]}>
-              <Text style={[styles.dayChipText, active && styles.dayChipTextActive]} numberOfLines={1}>
-                {day.label}
-              </Text>
-              {plannedCount > 0 ? (
-                <View style={styles.dayPlannedDot}>
-                  <Text style={styles.dayPlannedText}>{plannedCount}</Text>
-                </View>
-              ) : null}
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      <View style={styles.timelineList}>
-        {activeDay.items.map((item) => {
-          const planned = planQuery.isScheduleItemPlanned(item.id);
-          const pending = pendingItemIds.has(item.id);
-          return (
-            <View key={item.id} style={[styles.timelineCard, planned && styles.timelineCardPlanned]}>
-              <View style={styles.timelineRail}>
-                <View style={[styles.timelineDot, planned && styles.timelineDotPlanned]} />
-                <View style={styles.timelineLine} />
-              </View>
-              <View style={styles.timelineCardBody}>
-                <Text style={styles.timelineMeta} numberOfLines={1}>
-                  {formatScheduleTime(item.start_time, item.end_time)}
-                  {item.stage ? ` · ${item.stage}` : ''}
-                </Text>
-                <Text style={styles.timelineTitle} numberOfLines={2}>
-                  {item.title}
-                </Text>
-                {item.description ? (
-                  <Text style={styles.timelineDescription} numberOfLines={3}>
-                    {item.description}
-                  </Text>
-                ) : null}
-              </View>
-              <Pressable
-                disabled={pending}
-                onPress={() => {
-                  setPendingItemIds((prev) => new Set(prev).add(item.id));
-                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  toggleScheduleItemMutation.mutate(
-                    { scheduleItemId: item.id },
-                    {
-                      onSettled: () => {
-                        setPendingItemIds((prev) => {
-                          const next = new Set(prev);
-                          next.delete(item.id);
-                          return next;
-                        });
-                      },
-                    },
-                  );
-                }}
-                style={({ pressed }) => [
-                  styles.timelinePlanButton,
-                  planned && styles.timelinePlanButtonActive,
-                  (pressed || pending) && styles.timelinePlanButtonPressed,
-                ]}>
-                {pending ? (
-                  <ActivityIndicator size="small" color={planned ? '#FFFFFF' : festivalUi.colors.text} />
-                ) : (
-                  <>
-                    <Ionicons
-                      name={planned ? 'checkmark' : 'add'}
-                      size={17}
-                      color={planned ? '#FFFFFF' : festivalUi.colors.text}
-                    />
-                    <Text style={[styles.timelinePlanText, planned && styles.timelinePlanTextActive]}>
-                      {planned ? 'В плана' : 'План'}
-                    </Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-          );
-        })}
-      </View>
-    </Reanimated.View>
-  );
-});
-
 export default function FestivalDetailScreen() {
-  const { slug: slugParam } = useLocalSearchParams<{ slug: string }>();
+  const qc = useQueryClient();
+  const { slug: slugParam, scheduleDay: scheduleDayParamRaw } = useLocalSearchParams<{
+    slug: string;
+    scheduleDay?: string;
+  }>();
   const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam;
+  const scheduleDayParam = Array.isArray(scheduleDayParamRaw)
+    ? scheduleDayParamRaw[0]
+    : scheduleDayParamRaw;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const toggleSavedMutation = useToggleSavedMutation();
@@ -421,6 +286,8 @@ export default function FestivalDetailScreen() {
     queryKey: ['festival', slug],
     queryFn: () => getFestival(slug ?? ''),
     enabled: Boolean(slug),
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
   });
 
   const { data: relatedRaw } = useQuery({
@@ -434,6 +301,10 @@ export default function FestivalDetailScreen() {
     if (!relatedRaw || !data) return [];
     return relatedRaw.filter((x) => x.slug !== data.slug).slice(0, 12);
   }, [relatedRaw, data]);
+
+  const groupedScheduleDays = useMemo(() => (data ? groupFestivalSchedule(data) : []), [data]);
+  const planQuery = useMobilePlanState();
+  const toggleScheduleItemMutation = useTogglePlanScheduleItemMutation();
 
   useEffect(() => {
     if (!data) return;
@@ -464,6 +335,17 @@ export default function FestivalDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (slug) {
+        const q = qc.getQueryState(['festival', slug]);
+        const updatedAt = q?.dataUpdatedAt ?? 0;
+        if (
+          Date.now() - updatedAt > 15_000 &&
+          q?.fetchStatus !== 'fetching' &&
+          q?.status !== 'pending'
+        ) {
+          void qc.refetchQueries({ queryKey: ['festival', slug], type: 'active' });
+        }
+      }
       return () => {
         lightboxAnimTokenRef.current += 1;
         galleryFade.stopAnimation();
@@ -472,7 +354,7 @@ export default function FestivalDetailScreen() {
         setSelectedGalleryUri(null);
         galleryFade.setValue(0);
       };
-    }, [galleryFade]),
+    }, [galleryFade, qc, slug]),
   );
 
   const toggleDescriptionExpanded = useCallback(() => {
@@ -672,22 +554,9 @@ export default function FestivalDetailScreen() {
   const categoryLabel = data.category?.trim();
   const tagPreview = data.tags?.slice(0, 2).join(' · ');
 
-  return (
-    <View style={styles.root}>
-      {galleryVisible && selectedGalleryUri ? (
-        <GalleryLightbox
-          uri={selectedGalleryUri}
-          onClose={closeGallery}
-          insetTop={insets.top}
-          fadeAnim={galleryFade}
-        />
-      ) : null}
-
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContentBottom, { paddingBottom: stickyBottomReserve }]}>
-        <Reanimated.View style={styles.heroWrap} entering={FadeIn.duration(220)}>
+  const scheduleListHeader = (
+    <>
+      <Reanimated.View style={styles.heroWrap} entering={FadeIn.duration(220)}>
           {coverUri ? (
             <ExpoImage
               source={{ uri: coverUri }}
@@ -775,9 +644,11 @@ export default function FestivalDetailScreen() {
             ) : null}
           </Reanimated.View>
         ) : null}
+    </>
+  );
 
-        <ScheduleTimelineSection detail={data} />
-
+  const scheduleListFooter = (
+    <>
         {organizerName ? (
           <Reanimated.View
             style={styles.blockPad}
@@ -911,7 +782,39 @@ export default function FestivalDetailScreen() {
             </ScrollView>
           </Reanimated.View>
         ) : null}
-      </ScrollView>
+    </>
+  );
+
+  return (
+    <View style={styles.root}>
+      {galleryVisible && selectedGalleryUri ? (
+        <GalleryLightbox
+          uri={selectedGalleryUri}
+          onClose={closeGallery}
+          insetTop={insets.top}
+          fadeAnim={galleryFade}
+        />
+      ) : null}
+
+      {groupedScheduleDays.length > 0 ? (
+        <FestivalScheduleSectionList
+          detail={data}
+          listHeader={scheduleListHeader}
+          listFooter={scheduleListFooter}
+          contentContainerBottom={stickyBottomReserve}
+          initialScheduleDay={scheduleDayParam}
+          isScheduleItemPlanned={planQuery.isScheduleItemPlanned}
+          toggleScheduleItemMutation={toggleScheduleItemMutation}
+        />
+      ) : (
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.scrollContentBottom, { paddingBottom: stickyBottomReserve }]}>
+          {scheduleListHeader}
+          {scheduleListFooter}
+        </ScrollView>
+      )}
 
       <FestivalDetailStickyBar
         saved={data.saved}
@@ -998,181 +901,6 @@ const styles = StyleSheet.create({
   },
   metaChipTextDark: {
     color: 'rgba(255,255,255,0.96)',
-  },
-  scheduleSection: {
-    marginHorizontal: festivalUi.screenPadding,
-    marginTop: 8,
-    marginBottom: 18,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-    padding: 14,
-  },
-  scheduleHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  scheduleHint: {
-    marginTop: 4,
-    fontSize: 13,
-    color: festivalUi.colors.secondary,
-    lineHeight: 18,
-  },
-  scheduleCountPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#E0E7FF',
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  scheduleCountText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#3730A3',
-  },
-  daySelector: {
-    gap: 8,
-    paddingTop: 12,
-    paddingBottom: 10,
-  },
-  dayChip: {
-    minHeight: 36,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  dayChipActive: {
-    borderColor: festivalUi.colors.text,
-    backgroundColor: festivalUi.colors.text,
-  },
-  dayChipPressed: {
-    opacity: 0.78,
-  },
-  dayChipText: {
-    maxWidth: 160,
-    fontSize: 13,
-    fontWeight: '700',
-    color: festivalUi.colors.text,
-  },
-  dayChipTextActive: {
-    color: '#FFFFFF',
-  },
-  dayPlannedDot: {
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-    backgroundColor: '#DCFCE7',
-  },
-  dayPlannedText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#166534',
-  },
-  timelineList: {
-    gap: 10,
-  },
-  timelineCard: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 10,
-    paddingRight: 10,
-  },
-  timelineCardPlanned: {
-    borderColor: '#BBF7D0',
-    backgroundColor: '#F0FDF4',
-  },
-  timelineRail: {
-    width: 30,
-    alignItems: 'center',
-  },
-  timelineDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#CBD5E1',
-    marginTop: 5,
-  },
-  timelineDotPlanned: {
-    backgroundColor: '#16A34A',
-  },
-  timelineLine: {
-    flex: 1,
-    width: StyleSheet.hairlineWidth,
-    backgroundColor: '#E5E7EB',
-    marginTop: 5,
-  },
-  timelineCardBody: {
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 10,
-  },
-  timelineMeta: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-    color: festivalUi.colors.secondary,
-    textTransform: 'uppercase',
-  },
-  timelineTitle: {
-    marginTop: 4,
-    fontSize: 15,
-    fontWeight: '800',
-    color: festivalUi.colors.text,
-    lineHeight: 20,
-  },
-  timelineDescription: {
-    marginTop: 5,
-    fontSize: 13,
-    color: festivalUi.colors.secondary,
-    lineHeight: 18,
-  },
-  timelinePlanButton: {
-    minWidth: 70,
-    height: 36,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    alignSelf: 'center',
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-  },
-  timelinePlanButtonActive: {
-    borderColor: '#16A34A',
-    backgroundColor: '#16A34A',
-  },
-  timelinePlanButtonPressed: {
-    opacity: 0.72,
-  },
-  timelinePlanText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: festivalUi.colors.text,
-  },
-  timelinePlanTextActive: {
-    color: '#FFFFFF',
   },
   verifyChip: {
     flexDirection: 'row',

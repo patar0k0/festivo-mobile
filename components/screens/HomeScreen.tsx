@@ -40,8 +40,9 @@ const TRENDING_CARD_SEPARATOR_WIDTH = 14;
 type SectionKey = 'week' | 'popular' | 'continue';
 type SectionVariant = 'continue' | 'week' | 'popular' | 'following';
 
-type HomeSection = {
-  key: SectionKey;
+type HomeSectionBase = {
+  /** Feed layout bucket (continue / week / popular). Not a React list key. */
+  bucket: SectionKey;
   source:
     | 'recently_viewed'
     | PersonalizedSection['key']
@@ -55,6 +56,9 @@ type HomeSection = {
   data: FestivalListItem[];
 };
 
+/** SectionList row: `key` must be unique per section or RN duplicates sticky/header cells (e.g. '.$week=2header'). */
+type HomeSection = HomeSectionBase & { key: string };
+
 const IMAGE_PLACEHOLDER_HASH = 'L5H2EC=PM+yV0g-mq.wG9c010J}I';
 const SECTION_ROTATION_ORDERS: ('continue' | 'week' | 'popular')[][] = [
   ['continue', 'week', 'popular'],
@@ -63,7 +67,7 @@ const SECTION_ROTATION_ORDERS: ('continue' | 'week' | 'popular')[][] = [
   ['popular', 'continue', 'week'],
 ];
 
-function pickSectionTitle(section: HomeSection): string {
+function pickSectionTitle(section: HomeSectionBase): string {
   const firstItem = section.data[0];
   const city = firstItem?.city?.trim();
   switch (section.source) {
@@ -113,6 +117,33 @@ function resolveWeekendHint(dateIso: string): boolean {
   if (Number.isNaN(date.getTime())) return false;
   const day = date.getDay();
   return day === 0 || day === 6;
+}
+
+function attachPlannerRecencyHints(
+  items: FestivalListItem[],
+  savedFestivalIds: string[],
+  hasPlannedScheduleItems: boolean,
+): FestivalListItem[] {
+  const saved = new Set(savedFestivalIds);
+  return items.map((item) => {
+    if (!saved.has(item.festivalId)) {
+      if (!item.planner_recency_hint) return item;
+      const { planner_recency_hint: _h, ...rest } = item;
+      return rest;
+    }
+    let planner_recency_hint: string;
+    if (resolveWeekendHint(item.start_date)) {
+      planner_recency_hint = hasPlannedScheduleItems
+        ? 'Планираш уикенда · сесии в програмата'
+        : 'Планираш този уикенд';
+    } else {
+      planner_recency_hint = hasPlannedScheduleItems
+        ? 'Продължи програмата си'
+        : 'В твоя план';
+    }
+    if (item.planner_recency_hint === planner_recency_hint) return item;
+    return { ...item, planner_recency_hint };
+  });
 }
 
 function mostCommon(values: string[]): string | null {
@@ -366,6 +397,11 @@ function CompactWeekCard({
         <Text style={styles.compactDate} numberOfLines={1}>
           {range}
         </Text>
+        {item.planner_recency_hint ? (
+          <Text style={styles.plannerRecencyHint} numberOfLines={1}>
+            {item.planner_recency_hint}
+          </Text>
+        ) : null}
       </View>
       <Pressable
         disabled={saveDisabled}
@@ -517,6 +553,11 @@ function PopularCard({
           <Text style={styles.popularHint} numberOfLines={1}>
             Най-запазвани от общността
           </Text>
+          {item.planner_recency_hint ? (
+            <Text style={styles.plannerRecencyHintPopular} numberOfLines={1}>
+              {item.planner_recency_hint}
+            </Text>
+          ) : null}
         </View>
         <Pressable
           disabled={saveDisabled}
@@ -620,18 +661,18 @@ export default function HomeScreen() {
     return out;
   }, [personalizedSections, popular, trending, week]);
 
-  const plannerAwareSections = useMemo<HomeSection[]>(() => {
+  const plannerAwareSections = useMemo<HomeSectionBase[]>(() => {
     const plannedIds = new Set(planQuery.savedFestivalIds);
     if (!plannedIds.size) return [];
     const plannedVisible = recommendationPool.filter((item) => plannedIds.has(item.festivalId));
     const candidates = recommendationPool.filter((item) => !plannedIds.has(item.festivalId));
-    const sectionsOut: HomeSection[] = [];
+    const sectionsOut: HomeSectionBase[] = [];
 
     const plannedWeekend = plannedVisible.filter((item) => resolveWeekendHint(item.start_date));
     const weekendCandidates = candidates.filter((item) => resolveWeekendHint(item.start_date)).slice(0, 4);
     if (plannedWeekend.length > 0 && weekendCandidates.length > 0) {
       sectionsOut.push({
-        key: 'week',
+        bucket: 'week',
         source: 'planner_weekend',
         variant: 'week',
         title: 'Продължи планирането за уикенда',
@@ -644,7 +685,7 @@ export default function HomeScreen() {
       const categoryCandidates = candidates.filter((item) => item.category === category).slice(0, 4);
       if (categoryCandidates.length > 0) {
         sectionsOut.push({
-          key: 'week',
+          bucket: 'week',
           source: 'planner_category',
           variant: 'week',
           title: 'Подобни на планираните от теб',
@@ -658,7 +699,7 @@ export default function HomeScreen() {
       const cityCandidates = candidates.filter((item) => item.city === city).slice(0, 4);
       if (cityCandidates.length > 0) {
         sectionsOut.push({
-          key: 'popular',
+          bucket: 'popular',
           source: 'planner_city',
           variant: 'popular',
           title: `Често избираш събития в ${city}`,
@@ -710,7 +751,7 @@ export default function HomeScreen() {
   const sessionOrder = SECTION_ROTATION_ORDERS[rotationSeedRef.current];
 
   const sections = useMemo(() => {
-    const grouped: Record<'continue' | 'week' | 'popular', HomeSection[]> = {
+    const grouped: Record<'continue' | 'week' | 'popular', HomeSectionBase[]> = {
       continue: [],
       week: [],
       popular: [],
@@ -718,7 +759,7 @@ export default function HomeScreen() {
 
     if (continueExploring.length > 0) {
       grouped.continue.push({
-        key: 'continue',
+        bucket: 'continue',
         source: 'recently_viewed',
         variant: 'continue',
         title: 'Продължи оттук',
@@ -727,10 +768,10 @@ export default function HomeScreen() {
     }
 
     for (const section of personalizedSections) {
-      const key: SectionKey = section.key === 'trending' ? 'popular' : 'week';
-      const variant: SectionVariant = section.key === 'from_followed_organizers' ? 'following' : key;
-      grouped[key].push({
-        key,
+      const bucket: SectionKey = section.key === 'trending' ? 'popular' : 'week';
+      const variant: SectionVariant = section.key === 'from_followed_organizers' ? 'following' : bucket;
+      grouped[bucket].push({
+        bucket,
         source: section.key,
         variant,
         title: section.title,
@@ -738,13 +779,13 @@ export default function HomeScreen() {
       });
     }
 
-    for (const section of plannerAwareSections) {
-      grouped[section.key === 'popular' ? 'popular' : 'week'].push(section);
+    for (const section of [...plannerAwareSections].reverse()) {
+      grouped[section.bucket === 'popular' ? 'popular' : 'week'].unshift(section);
     }
 
     if (!weekQuery.isLoading && weekFiltered.length > 0) {
       grouped.week.push({
-        key: 'week',
+        bucket: 'week',
         source: 'week',
         variant: 'week',
         title: 'Тази седмица',
@@ -753,7 +794,7 @@ export default function HomeScreen() {
     }
     if (!popularQuery.isLoading && popular.length > 0) {
       grouped.popular.push({
-        key: 'popular',
+        bucket: 'popular',
         source: 'popular',
         variant: 'popular',
         title: 'Най-запазвани',
@@ -761,12 +802,34 @@ export default function HomeScreen() {
       });
     }
 
-    const ordered = sessionOrder.flatMap((key) => grouped[key]);
-    return ordered.map((section) => ({ ...section, title: pickSectionTitle(section) }));
+    const ordered = sessionOrder.flatMap((bucket) => grouped[bucket]);
+    const hasProgram = planQuery.savedScheduleItemIds.length > 0;
+    const sourceOccurrence = new Map<string, number>();
+    return ordered.map((section) => {
+      const data =
+        section.variant === 'continue'
+          ? section.data
+          : attachPlannerRecencyHints(
+              section.data as FestivalListItem[],
+              planQuery.savedFestivalIds,
+              hasProgram,
+            );
+      const src = section.source;
+      const n = (sourceOccurrence.get(src) ?? 0) + 1;
+      sourceOccurrence.set(src, n);
+      return {
+        ...section,
+        key: `${src}:${n}`,
+        data: data as HomeSection['data'],
+        title: pickSectionTitle(section),
+      };
+    });
   }, [
     continueExploring,
     personalizedSections,
     plannerAwareSections,
+    planQuery.savedFestivalIds,
+    planQuery.savedScheduleItemIds,
     popular,
     popularQuery.isLoading,
     sessionOrder,
@@ -780,7 +843,8 @@ export default function HomeScreen() {
     void popularQuery.refetch();
     void personalizedQuery.refetch();
     void recentlyViewedQuery.refetch();
-  }, [trendingQuery, weekQuery, popularQuery, personalizedQuery, recentlyViewedQuery]);
+    void planQuery.refetch();
+  }, [trendingQuery, weekQuery, popularQuery, personalizedQuery, recentlyViewedQuery, planQuery]);
 
   const openFestival = useCallback(
     (item: FestivalListItem) => {
@@ -899,7 +963,7 @@ export default function HomeScreen() {
     (weekQuery.isLoading && week.length === 0) || weekQuery.isError;
 
   /** RN lists can skip cell updates if only nested fields change; `dataUpdatedAt` bumps on every cache patch. */
-  const listExtrasKey = `${trendingQuery.dataUpdatedAt}|${weekQuery.dataUpdatedAt}|${popularQuery.dataUpdatedAt}|${[...pendingIds].sort().join(',')}`;
+  const listExtrasKey = `${trendingQuery.dataUpdatedAt}|${weekQuery.dataUpdatedAt}|${popularQuery.dataUpdatedAt}|${planQuery.dataUpdatedAt}|${[...pendingIds].sort().join(',')}`;
   const renderSectionHeader = useCallback(({ section }: { section: HomeSection }) => {
     const toneStyle =
       section.variant === 'popular'
@@ -1255,6 +1319,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666666',
     fontWeight: '400',
+  },
+  plannerRecencyHint: {
+    marginTop: 5,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#4F46E5',
+    letterSpacing: 0.1,
+  },
+  plannerRecencyHintPopular: {
+    marginTop: 5,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#4338CA',
+    letterSpacing: 0.1,
   },
   compactSave: {
     padding: 4,

@@ -1,14 +1,17 @@
-import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
+import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
   LayoutAnimation,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,12 +19,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReminderBottomSheet } from '@/components/plan/ReminderBottomSheet';
 import { AnimatedCount } from '@/components/ui/AnimatedCount';
 import { FestivalCard, festivalUi } from '@/components/ui/FestivalCard';
-import { getFestivalBySlug, getFestivals, type FestivalDetail, type FestivalListItem } from '@/lib/api/festivals';
-import { type MobilePlanReminderType, type MobilePlanStateDto, updateFestivalReminder } from '@/lib/api/mobilePlan';
-import { formatScheduleTime, groupFestivalSchedule } from '@/lib/plan/schedule';
+import {
+  getFestivalBySlug,
+  getFestivals,
+  type FestivalDetail,
+  type FestivalListItem,
+  type FestivalScheduleItem,
+} from '@/lib/api/festivals';
+import { type MobilePlanReminderType } from '@/lib/api/mobilePlan';
+import { formatScheduleTime, getFestivalScheduleTimeZone, groupFestivalSchedule } from '@/lib/plan/schedule';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 import { useTogglePlanFestivalMutation } from '@/lib/query/useTogglePlanFestivalMutation';
-import { queryClient } from '@/lib/queryClient';
+import { useUpdatePlanReminderMutation } from '@/lib/query/useUpdatePlanReminderMutation';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type PlanGroupKey = 'this_weekend' | 'this_week' | 'upcoming' | 'later' | 'past';
 type PlanViewMode = 'festivals' | 'calendar';
@@ -35,6 +48,7 @@ type PlannedScheduleEntry = {
   date: string;
   timeLabel: string;
   sortTime: number;
+  sortKey: number;
   stage?: string | null;
   title: string;
 };
@@ -110,6 +124,29 @@ function scheduleSortTime(raw: string): number {
   return match ? Number(match[1]) * 60 + Number(match[2]) : 24 * 60 + 999;
 }
 
+function todayYmdLocal(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function itemSortKey(detail: FestivalDetail, item: FestivalScheduleItem): number {
+  if (item.starts_at?.includes('T')) {
+    const ms = Date.parse(item.starts_at);
+    if (Number.isFinite(ms)) return ms;
+  }
+  const tz = getFestivalScheduleTimeZone(detail);
+  const label = formatScheduleTime(item.starts_at ?? item.start_time, item.ends_at ?? item.end_time, tz);
+  return scheduleSortTime(label);
+}
+
+function firstPlannedDayYmd(entries: PlannedScheduleEntry[], festivalId: string): string | undefined {
+  const row = entries.find((e) => e.festivalId === festivalId);
+  return row ? row.date.slice(0, 10) : undefined;
+}
+
 function buildPlannedScheduleEntries(
   details: FestivalDetail[],
   plannedScheduleItemIds: string[],
@@ -117,10 +154,16 @@ function buildPlannedScheduleEntries(
   const plannedSet = new Set(plannedScheduleItemIds);
   const entries: PlannedScheduleEntry[] = [];
   for (const detail of details) {
+    const tz = getFestivalScheduleTimeZone(detail);
     for (const day of groupFestivalSchedule(detail)) {
       for (const item of day.items) {
         if (!plannedSet.has(item.id)) continue;
-        const timeLabel = formatScheduleTime(item.start_time, item.end_time);
+        const timeLabel = formatScheduleTime(
+          item.starts_at ?? item.start_time,
+          item.ends_at ?? item.end_time,
+          tz,
+        );
+        const sortKey = itemSortKey(detail, item);
         entries.push({
           scheduleItemId: item.id,
           festivalId: detail.festivalId,
@@ -130,13 +173,14 @@ function buildPlannedScheduleEntries(
           date: day.date,
           timeLabel,
           sortTime: scheduleSortTime(timeLabel),
-          stage: item.stage,
+          sortKey,
+          stage: item.stage ?? item.venue,
           title: item.title,
         });
       }
     }
   }
-  return entries.sort((a, b) => a.date.localeCompare(b.date) || a.sortTime - b.sortTime);
+  return entries.sort((a, b) => a.date.localeCompare(b.date) || a.sortKey - b.sortKey);
 }
 
 function countPlannedItemsByFestival(details: FestivalDetail[], plannedScheduleItemIds: string[]): Record<string, number> {
@@ -155,7 +199,10 @@ function countPlannedItemsByFestival(details: FestivalDetail[], plannedScheduleI
 function PlanViewTab({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }}
       style={({ pressed }) => [styles.viewTab, active && styles.viewTabActive, pressed && styles.viewTabPressed]}>
       <Text style={[styles.viewTabText, active && styles.viewTabTextActive]}>{label}</Text>
     </Pressable>
@@ -169,6 +216,7 @@ function PlannerCalendar({
   groups: { date: string; entries: PlannedScheduleEntry[] }[];
   onPressEntry: (entry: PlannedScheduleEntry) => void;
 }) {
+  const ymdToday = todayYmdLocal();
   if (!groups.length) {
     return (
       <View style={styles.emptyCalendar}>
@@ -184,6 +232,7 @@ function PlannerCalendar({
     <View style={styles.calendarWrap}>
       {groups.map((group) => {
         const busy = group.entries.length >= 3;
+        const isToday = group.date.slice(0, 10) === ymdToday;
         const hasConflicts = group.entries.some((entry, index) =>
           group.entries.some(
             (other, otherIndex) =>
@@ -193,39 +242,52 @@ function PlannerCalendar({
           ),
         );
         return (
-          <View key={group.date} style={styles.calendarDayCard}>
-            <View style={styles.calendarDayHeader}>
-              <View>
-                <Text style={styles.calendarDateLabel}>{formatCalendarDateLabel(group.date)}</Text>
-                <Text style={styles.calendarDateSub}>
-                  {busy ? 'Натоварен ден' : `${group.entries.length} планирани точки`}
-                </Text>
-              </View>
-              <View style={[styles.busyBadge, busy && styles.busyBadgeActive]}>
-                <Text style={[styles.busyBadgeText, busy && styles.busyBadgeTextActive]}>
-                  {hasConflicts ? 'Конфликт' : busy ? 'Busy' : 'OK'}
-                </Text>
-              </View>
-            </View>
-            {group.entries.map((entry) => (
-              <Pressable
-                key={entry.scheduleItemId}
-                onPress={() => onPressEntry(entry)}
-                style={({ pressed }) => [styles.calendarEntry, pressed && styles.calendarEntryPressed]}>
-                <View style={styles.calendarTimeRail}>
-                  <Text style={styles.calendarTime}>{entry.timeLabel}</Text>
-                </View>
-                <View style={styles.calendarEntryBody}>
-                  <Text style={styles.calendarEntryTitle} numberOfLines={2}>
-                    {entry.title}
+          <View key={group.date} style={[styles.calendarDayCard, isToday && styles.calendarDayCardToday]}>
+            <Pressable
+              onPress={() => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              style={styles.calendarDayHeaderPressable}>
+              <View style={styles.calendarDayHeader}>
+                <View>
+                  <Text style={[styles.calendarDateLabel, isToday && styles.calendarDateLabelToday]}>
+                    {formatCalendarDateLabel(group.date)}
                   </Text>
-                  <Text style={styles.calendarEntryMeta} numberOfLines={1}>
-                    {entry.festivalTitle} · {entry.city}
-                    {entry.stage ? ` · ${entry.stage}` : ''}
+                  <Text style={styles.calendarDateSub}>
+                    {busy ? 'Натоварен ден' : `${group.entries.length} планирани точки`}
                   </Text>
                 </View>
-              </Pressable>
-            ))}
+                <View style={[styles.busyBadge, busy && styles.busyBadgeActive]}>
+                  <Text style={[styles.busyBadgeText, busy && styles.busyBadgeTextActive]}>
+                    {hasConflicts ? 'Конфликт' : busy ? 'Busy' : 'OK'}
+                  </Text>
+                </View>
+              </View>
+            </Pressable>
+            {group.entries.map((entry, entryIndex) => {
+              const isNextUp = isToday && entryIndex === 0;
+              return (
+                <Pressable
+                  key={entry.scheduleItemId}
+                  onPress={() => onPressEntry(entry)}
+                  style={({ pressed }) => [
+                    styles.calendarEntry,
+                    isNextUp && styles.calendarEntryNext,
+                    pressed && styles.calendarEntryPressed,
+                  ]}>
+                  <View style={styles.calendarTimeRail}>
+                    <Text style={[styles.calendarTime, isNextUp && styles.calendarTimeNext]}>{entry.timeLabel}</Text>
+                  </View>
+                  <View style={styles.calendarEntryBody}>
+                    <Text style={[styles.calendarEntryTitle, isNextUp && styles.calendarEntryTitleNext]} numberOfLines={2}>
+                      {entry.title}
+                    </Text>
+                    <Text style={styles.calendarEntryMeta} numberOfLines={1}>
+                      {entry.festivalTitle} · {entry.city}
+                      {entry.stage ? ` · ${entry.stage}` : ''}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         );
       })}
@@ -247,31 +309,7 @@ export default function PlanScreen() {
     staleTime: 60_000,
   });
 
-  const reminderMutation = useMutation({
-    mutationFn: ({ festivalId, type }: { festivalId: string; type: MobilePlanReminderType }) =>
-      updateFestivalReminder(festivalId, type),
-    onMutate: async ({ festivalId, type }) => {
-      await queryClient.cancelQueries({ queryKey: ['mobilePlanState'] });
-      const prev = queryClient.getQueryData<MobilePlanStateDto>(['mobilePlanState']);
-      if (!prev) return { prev };
-      queryClient.setQueryData<MobilePlanStateDto>(['mobilePlanState'], {
-        ...prev,
-        reminders: {
-          ...prev.reminders,
-          [festivalId]: { type, updated_at: new Date().toISOString() },
-        },
-      });
-      return { prev };
-    },
-    onError: (_e, _vars, ctx) => {
-      if (ctx?.prev) {
-        queryClient.setQueryData(['mobilePlanState'], ctx.prev);
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['mobilePlanState'] });
-    },
-  });
+  const reminderMutation = useUpdatePlanReminderMutation();
 
   const plannedFestivals = useMemo(() => {
     const idSet = new Set(planQuery.savedFestivalIds);
@@ -323,8 +361,17 @@ export default function PlanScreen() {
     }
     return Array.from(map.entries()).map(([date, entries]) => ({
       date,
-      entries: entries.sort((a, b) => a.sortTime - b.sortTime),
+      entries: entries.sort((a, b) => a.sortKey - b.sortKey),
     }));
+  }, [plannedScheduleEntries]);
+
+  const todaysPlanEntries = useMemo(() => {
+    const ymd = todayYmdLocal();
+    return plannedScheduleEntries.filter((e) => e.date.slice(0, 10) === ymd).slice(0, 10);
+  }, [plannedScheduleEntries]);
+  const upcomingPlanPreview = useMemo(() => {
+    const ymd = todayYmdLocal();
+    return plannedScheduleEntries.filter((e) => e.date.slice(0, 10) > ymd).slice(0, 6);
   }, [plannedScheduleEntries]);
 
   const grouped = useMemo(() => {
@@ -403,6 +450,70 @@ export default function PlanScreen() {
         </View>
       </View>
 
+      {viewMode === 'festivals' && todaysPlanEntries.length > 0 ? (
+        <View style={styles.previewSection}>
+          <Text style={styles.sectionTitle}>Днес</Text>
+          <View style={styles.previewCard}>
+            {todaysPlanEntries.map((entry, index) => (
+              <Pressable
+                key={entry.scheduleItemId}
+                onPress={() =>
+                  router.push(
+                    `/festival/${entry.festivalSlug}?scheduleDay=${encodeURIComponent(entry.date.slice(0, 10))}`,
+                  )
+                }
+                style={({ pressed }) => [
+                  styles.previewRow,
+                  index === 0 && styles.previewRowFirst,
+                  pressed && styles.previewRowPressed,
+                ]}>
+                <Text style={styles.previewTime}>{entry.timeLabel}</Text>
+                <View style={styles.previewBody}>
+                  <Text style={styles.previewTitle} numberOfLines={2}>
+                    {entry.title}
+                  </Text>
+                  <Text style={styles.previewMeta} numberOfLines={1}>
+                    {entry.festivalTitle} · {entry.city}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {viewMode === 'festivals' && upcomingPlanPreview.length > 0 ? (
+        <View style={styles.previewSection}>
+          <Text style={styles.sectionTitle}>Следващи в плана</Text>
+          <View style={styles.previewCard}>
+            {upcomingPlanPreview.map((entry, index) => (
+              <Pressable
+                key={`${entry.scheduleItemId}-up`}
+                onPress={() =>
+                  router.push(
+                    `/festival/${entry.festivalSlug}?scheduleDay=${encodeURIComponent(entry.date.slice(0, 10))}`,
+                  )
+                }
+                style={({ pressed }) => [
+                  styles.previewRow,
+                  index === 0 && styles.previewRowFirst,
+                  pressed && styles.previewRowPressed,
+                ]}>
+                <Text style={styles.previewTime}>{formatCalendarDateLabel(entry.date)}</Text>
+                <View style={styles.previewBody}>
+                  <Text style={styles.previewTitle} numberOfLines={2}>
+                    {entry.title}
+                  </Text>
+                  <Text style={styles.previewMeta} numberOfLines={1}>
+                    {entry.timeLabel} · {entry.festivalTitle}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       {viewMode === 'calendar' ? (
         <PlannerCalendar
           groups={calendarGroups}
@@ -435,13 +546,28 @@ export default function PlanScreen() {
                     </View>
                   ) : null}
                   <View style={styles.inlineActions}>
-                    <Pressable onPress={() => openReminderPicker(item.festivalId)} style={styles.reminderChip}>
-                      <Text style={styles.reminderChipText}>{REMINDER_LABELS[reminder]}</Text>
+                    <Pressable
+                      onPress={() => openReminderPicker(item.festivalId)}
+                      style={[styles.reminderChip, reminder !== 'none' && styles.reminderChipEmphasis]}>
+                      <Text style={[styles.reminderChipText, reminder !== 'none' && styles.reminderChipTextEmphasis]}>
+                        {REMINDER_LABELS[reminder]}
+                      </Text>
                     </Pressable>
                     {reminder !== 'none' ? (
                       <View style={styles.reminderActiveChip}>
-                        <Text style={styles.reminderActiveText}>Активно</Text>
+                        <Text style={styles.reminderActiveText}>Напомняне активно</Text>
                       </View>
+                    ) : null}
+                    {plannedItemCount > 0 ? (
+                      <Pressable
+                        onPress={() => {
+                          const day = firstPlannedDayYmd(plannedScheduleEntries, item.festivalId);
+                          const qs = day ? `?scheduleDay=${encodeURIComponent(day)}` : '';
+                          router.push(`/festival/${item.slug}${qs}`);
+                        }}
+                        style={styles.secondaryChip}>
+                        <Text style={styles.secondaryChipText}>Програма</Text>
+                      </Pressable>
                     ) : null}
                     <Pressable onPress={() => router.push('/(tabs)/map')} style={styles.secondaryChip}>
                       <Text style={styles.secondaryChipText}>Карта</Text>
@@ -495,6 +621,9 @@ export default function PlanScreen() {
       onSelect={(type) => {
         const targetId = pickerFestivalId;
         if (!targetId) return;
+        void Haptics.impactAsync(
+          type === 'none' ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium,
+        );
         reminderMutation.mutate({ festivalId: targetId, type }, { onSettled: () => setPickerFestivalId(null) });
       }}
     />
@@ -574,6 +703,56 @@ const styles = StyleSheet.create({
   viewTabTextActive: {
     color: festivalUi.colors.text,
   },
+  previewSection: {
+    gap: 8,
+  },
+  previewCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  previewRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F3F4F6',
+  },
+  previewRowFirst: {
+    borderTopWidth: 0,
+    backgroundColor: '#FAFAFF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#4F46E5',
+    paddingVertical: 11,
+  },
+  previewRowPressed: {
+    opacity: 0.82,
+  },
+  previewTime: {
+    width: 56,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#4F46E5',
+    paddingTop: 2,
+  },
+  previewBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  previewTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: festivalUi.colors.text,
+    lineHeight: 19,
+  },
+  previewMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    color: festivalUi.colors.secondary,
+  },
   section: { marginTop: 8 },
   sectionTitle: { fontSize: 19, fontWeight: '800', color: festivalUi.colors.text, marginBottom: 8 },
   cardWrap: { marginBottom: 12 },
@@ -616,23 +795,38 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   calendarDayCard: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
-    padding: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  calendarDayCardToday: {
+    borderColor: '#A5B4FC',
+    backgroundColor: '#FAFAFF',
+  },
+  calendarDayHeaderPressable: {
+    marginHorizontal: -4,
+    marginTop: -2,
+    borderRadius: 10,
   },
   calendarDayHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 8,
+    marginBottom: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
   },
   calendarDateLabel: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: festivalUi.colors.text,
+  },
+  calendarDateLabelToday: {
+    color: '#3730A3',
   },
   calendarDateSub: {
     marginTop: 2,
@@ -665,29 +859,45 @@ const styles = StyleSheet.create({
     gap: 10,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
-    paddingTop: 10,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 7,
+  },
+  calendarEntryNext: {
+    backgroundColor: 'rgba(79, 70, 229, 0.06)',
+    marginHorizontal: -6,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    borderTopWidth: 0,
+    marginTop: 4,
   },
   calendarEntryPressed: {
     opacity: 0.75,
   },
   calendarTimeRail: {
-    width: 74,
+    width: 72,
   },
   calendarTime: {
     fontSize: 12,
     fontWeight: '800',
     color: '#4F46E5',
   },
+  calendarTimeNext: {
+    color: '#312E81',
+  },
   calendarEntryBody: {
     flex: 1,
     minWidth: 0,
   },
   calendarEntryTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     color: festivalUi.colors.text,
     lineHeight: 19,
+  },
+  calendarEntryTitleNext: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#1E1B4B',
   },
   calendarEntryMeta: {
     marginTop: 4,
@@ -703,7 +913,12 @@ const styles = StyleSheet.create({
     borderColor: '#D1D5DB',
     backgroundColor: '#FFFFFF',
   },
+  reminderChipEmphasis: {
+    borderColor: '#A7F3D0',
+    backgroundColor: '#F0FDF4',
+  },
   reminderChipText: { fontSize: 12, fontWeight: '700', color: festivalUi.colors.text },
+  reminderChipTextEmphasis: { color: '#166534' },
   reminderActiveChip: {
     paddingVertical: 6,
     paddingHorizontal: 10,

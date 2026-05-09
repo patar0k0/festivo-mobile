@@ -1,4 +1,9 @@
 import { apiFetch } from './client';
+import type {
+  MobileFestivalScheduleDto,
+  MobileScheduleDayDto,
+  MobileScheduleItemDto,
+} from '@/lib/api/mobileScheduleDto';
 
 export type GetFestivalsParams = {
   page?: number | string;
@@ -35,6 +40,8 @@ export type FestivalListItem = {
   /** Map markers — WGS84 when API provides coordinates */
   lat?: number;
   lng?: number;
+  /** Client-only: home feed planner coherence hint (not from API). */
+  planner_recency_hint?: string;
 };
 
 export type FestivalScheduleDay = {
@@ -49,8 +56,22 @@ export type FestivalScheduleItem = {
   day_id?: string | null;
   title: string;
   description?: string | null;
+  /** ISO-8601 UTC instant from Europe/Sofia wall time (canonical DTO). */
+  starts_at?: string | null;
+  ends_at?: string | null;
+  all_day?: boolean;
+  /** Maps DTO `venue`; also exposed as `stage` for UI helpers. */
+  venue?: string | null;
+  category?: string | null;
+  tags?: string[];
+  organizer_name?: string | null;
+  image_url?: string | null;
+  is_cancelled?: boolean;
+  sort_index?: number;
+  /** Legacy HH:mm from older payloads; prefer `starts_at` / `ends_at`. */
   start_time?: string | null;
   end_time?: string | null;
+  /** Alias of `venue` for compact cards. */
   stage?: string | null;
   sort_order?: number | null;
 };
@@ -89,6 +110,9 @@ export type FestivalDetail = {
     location_name?: string | null;
     place_id?: string | null;
   };
+  /** Canonical nested program DTO from `GET /api/mobile/festivals/[slug]`. */
+  schedule?: MobileFestivalScheduleDto;
+  /** Flattened days (derived from `schedule` or legacy fields). */
   schedule_days?: FestivalScheduleDay[];
   schedule_items?: FestivalScheduleItem[];
 };
@@ -106,7 +130,7 @@ function parseOptionalCoord(value: unknown): number | undefined {
   return undefined;
 }
 
-function optionalNullableString(value: unknown): string | null | undefined {
+function optionalNullableString(value: unknown): string | null {
   if (value == null) return null;
   const text = String(value).trim();
   return text ? text : null;
@@ -148,16 +172,127 @@ function parseScheduleItem(raw: unknown): FestivalScheduleItem | null {
   const id = String(rec.id ?? rec.schedule_item_id ?? rec.scheduleItemId ?? '').trim();
   const title = String(rec.title ?? '').trim();
   if (!id || !title) return null;
+  const venue = optionalNullableString(rec.venue ?? rec.stage);
+  const sortIdx =
+    typeof rec.sort_index === 'number' && Number.isFinite(rec.sort_index)
+      ? rec.sort_index
+      : parseOptionalNumber(rec.sort_order ?? rec.sortOrder);
   return {
     id,
     day_id: optionalNullableString(rec.day_id ?? rec.dayId),
     title,
     description: optionalNullableString(rec.description),
+    starts_at: optionalNullableString(rec.starts_at ?? rec.startsAt),
+    ends_at: optionalNullableString(rec.ends_at ?? rec.endsAt),
+    all_day: typeof rec.all_day === 'boolean' ? rec.all_day : typeof rec.allDay === 'boolean' ? rec.allDay : undefined,
+    venue,
+    category: optionalNullableString(rec.category),
+    organizer_name: optionalNullableString(rec.organizer_name ?? rec.organizerName),
+    image_url: optionalNullableString(rec.image_url ?? rec.imageUrl),
+    is_cancelled: typeof rec.is_cancelled === 'boolean' ? rec.is_cancelled : undefined,
+    sort_index: typeof rec.sort_index === 'number' && Number.isFinite(rec.sort_index) ? rec.sort_index : undefined,
     start_time: optionalNullableString(rec.start_time ?? rec.startTime),
     end_time: optionalNullableString(rec.end_time ?? rec.endTime),
-    stage: optionalNullableString(rec.stage),
-    sort_order: parseOptionalNumber(rec.sort_order ?? rec.sortOrder),
+    stage: venue ?? optionalNullableString(rec.stage),
+    sort_order: parseOptionalNumber(rec.sort_order ?? rec.sortOrder ?? rec.sort_index ?? rec.sortIndex),
   };
+}
+
+function parseMobileScheduleItemDto(raw: unknown): MobileScheduleItemDto | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const id = String(rec.id ?? '').trim();
+  const day_id = String(rec.day_id ?? rec.dayId ?? '').trim();
+  const title = String(rec.title ?? '').trim();
+  if (!id || !day_id || !title) return null;
+  const tagsRaw = Array.isArray(rec.tags) ? rec.tags : [];
+  const tags = tagsRaw.map((t) => String(t).trim()).filter(Boolean);
+  const sortRaw = rec.sort_index ?? rec.sortIndex;
+  return {
+    id,
+    day_id,
+    title,
+    description: optionalNullableString(rec.description),
+    starts_at: optionalNullableString(rec.starts_at ?? rec.startsAt),
+    ends_at: optionalNullableString(rec.ends_at ?? rec.endsAt),
+    all_day: Boolean(rec.all_day ?? rec.allDay),
+    venue: optionalNullableString(rec.venue),
+    category: optionalNullableString(rec.category),
+    tags,
+    organizer_name: optionalNullableString(rec.organizer_name ?? rec.organizerName),
+    image_url: optionalNullableString(rec.image_url ?? rec.imageUrl),
+    is_cancelled: Boolean(rec.is_cancelled ?? rec.isCancelled),
+    sort_index: typeof sortRaw === 'number' && Number.isFinite(sortRaw) ? sortRaw : 0,
+  };
+}
+
+function parseMobileScheduleDayDto(raw: unknown): MobileScheduleDayDto | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const id = String(rec.id ?? '').trim();
+  const date = String(rec.date ?? '').trim().slice(0, 10);
+  if (!id || !date) return null;
+  const itemsRaw = Array.isArray(rec.items) ? rec.items : [];
+  const items = itemsRaw.map(parseMobileScheduleItemDto).filter((x): x is MobileScheduleItemDto => x != null);
+  return {
+    id,
+    date,
+    title: optionalNullableString(rec.title),
+    items,
+  };
+}
+
+function parseMobileFestivalScheduleDto(raw: unknown): MobileFestivalScheduleDto | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const daysRaw = Array.isArray(rec.days) ? rec.days : [];
+  const days = daysRaw.map(parseMobileScheduleDayDto).filter((x): x is MobileScheduleDayDto => x != null);
+  return {
+    timezone: optionalNullableString(rec.timezone),
+    days,
+  };
+}
+
+function festivalScheduleItemFromDto(it: MobileScheduleItemDto): FestivalScheduleItem {
+  const venue = it.venue;
+  return {
+    id: it.id,
+    day_id: it.day_id,
+    title: it.title,
+    description: it.description,
+    starts_at: it.starts_at,
+    ends_at: it.ends_at,
+    all_day: it.all_day,
+    venue,
+    category: it.category ?? undefined,
+    tags: it.tags.length ? it.tags : undefined,
+    organizer_name: it.organizer_name ?? undefined,
+    image_url: it.image_url ?? undefined,
+    is_cancelled: it.is_cancelled,
+    sort_index: it.sort_index,
+    stage: venue,
+    start_time: null,
+    end_time: null,
+    sort_order: it.sort_index,
+  };
+}
+
+function flattenCanonicalSchedule(s: MobileFestivalScheduleDto): {
+  schedule_days: FestivalScheduleDay[];
+  schedule_items: FestivalScheduleItem[];
+} {
+  const schedule_days: FestivalScheduleDay[] = s.days.map((d) => ({
+    id: d.id,
+    date: d.date,
+    title: d.title,
+  }));
+  const schedule_items: FestivalScheduleItem[] = [];
+  for (const d of s.days) {
+    for (const it of d.items) {
+      schedule_items.push(festivalScheduleItemFromDto(it));
+    }
+  }
+  return { schedule_days, schedule_items };
 }
 
 function parseScheduleArrays(o: Record<string, unknown>): {
@@ -377,7 +512,17 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
 
   const is_verified_detail = Boolean(o.is_verified ?? o.verified ?? o.isVerified);
   const is_promoted_detail = Boolean(o.is_promoted ?? o.isPromoted);
-  const schedule = parseScheduleArrays(o);
+  const legacySchedule = parseScheduleArrays(o);
+  const scheduleDto = parseMobileFestivalScheduleDto(o.schedule);
+  let schedule: MobileFestivalScheduleDto | undefined;
+  let schedule_days = legacySchedule.schedule_days;
+  let schedule_items = legacySchedule.schedule_items;
+  if (scheduleDto && scheduleDto.days.length > 0) {
+    schedule = scheduleDto;
+    const flat = flattenCanonicalSchedule(scheduleDto);
+    if (flat.schedule_days.length) schedule_days = flat.schedule_days;
+    if (flat.schedule_items.length) schedule_items = flat.schedule_items;
+  }
 
   return {
     festivalId,
@@ -408,8 +553,9 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
     is_verified: is_verified_detail || undefined,
     is_promoted: is_promoted_detail || undefined,
     location,
-    schedule_days: schedule.schedule_days,
-    schedule_items: schedule.schedule_items,
+    schedule,
+    schedule_days,
+    schedule_items,
   };
 }
 

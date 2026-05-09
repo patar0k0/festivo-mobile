@@ -5,6 +5,13 @@ export type ScheduleTimelineDay = FestivalScheduleDay & {
   items: FestivalScheduleItem[];
 };
 
+const DEFAULT_SCHEDULE_TZ = 'Europe/Sofia';
+
+export function getFestivalScheduleTimeZone(detail: FestivalDetail): string {
+  const tz = detail.schedule?.timezone?.trim();
+  return tz || DEFAULT_SCHEDULE_TZ;
+}
+
 function timeValue(raw?: string | null): number {
   if (!raw?.trim()) return 24 * 60 + 999;
   const match = raw.trim().match(/^(\d{1,2}):(\d{2})/);
@@ -12,7 +19,30 @@ function timeValue(raw?: string | null): number {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
-export function formatScheduleTime(start?: string | null, end?: string | null): string {
+function formatIsoWallClock(iso: string | null | undefined, timeZone: string): string {
+  if (!iso?.trim()) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  try {
+    return d.toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit', timeZone });
+  } catch {
+    return d.toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' });
+  }
+}
+
+/**
+ * Formats schedule range: prefers ISO instants (`starts_at` / `ends_at`), then legacy HH:mm fields.
+ */
+export function formatScheduleTime(
+  start?: string | null,
+  end?: string | null,
+  timeZone: string = DEFAULT_SCHEDULE_TZ,
+): string {
+  const isoStart = start?.includes('T') ? formatIsoWallClock(start, timeZone) : '';
+  const isoEnd = end?.includes('T') ? formatIsoWallClock(end, timeZone) : '';
+  if (isoStart && isoEnd) return `${isoStart} – ${isoEnd}`;
+  if (isoStart || isoEnd) return isoStart || isoEnd;
+
   const formatOne = (raw?: string | null) => {
     const text = raw?.trim();
     if (!text) return '';
@@ -35,9 +65,17 @@ export function formatScheduleDayLabel(dateIso: string, title?: string | null): 
 
 export function sortScheduleItems(items: FestivalScheduleItem[]): FestivalScheduleItem[] {
   return [...items].sort((a, b) => {
+    const ia = a.sort_index ?? a.sort_order;
+    const ib = b.sort_index ?? b.sort_order;
+    if (typeof ia === 'number' && typeof ib === 'number' && Number.isFinite(ia) && Number.isFinite(ib)) {
+      if (ia !== ib) return ia - ib;
+    }
+    const sa = a.starts_at ? Date.parse(a.starts_at) : NaN;
+    const sb = b.starts_at ? Date.parse(b.starts_at) : NaN;
+    if (Number.isFinite(sa) && Number.isFinite(sb) && sa !== sb) return sa - sb;
     const timeDiff = timeValue(a.start_time) - timeValue(b.start_time);
     if (timeDiff !== 0) return timeDiff;
-    return Number(a.sort_order ?? 999) - Number(b.sort_order ?? 999);
+    return String(a.id).localeCompare(String(b.id));
   });
 }
 
@@ -80,4 +118,14 @@ export function pickInitialScheduleDayIndex(days: ScheduleTimelineDay[]): number
     return !Number.isNaN(d.getTime()) && new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() > todayStart;
   });
   return upcoming >= 0 ? upcoming : 0;
+}
+
+export function findScheduleSectionIndexForDate(
+  days: ScheduleTimelineDay[],
+  ymd: string | undefined,
+): number | null {
+  if (!ymd?.trim()) return null;
+  const key = ymd.trim().slice(0, 10);
+  const idx = days.findIndex((d) => d.date.slice(0, 10) === key);
+  return idx >= 0 ? idx : null;
 }

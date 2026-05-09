@@ -4,6 +4,10 @@ import type { FollowFeedPage } from '@/lib/api/followFeed';
 import type { FestivalDetail, FestivalListItem } from '@/lib/api/festivals';
 import { removeFestivalFromPlan, saveFestivalToPlan, type MobilePlanStateDto } from '@/lib/api/mobilePlan';
 import type { OrganizerDetail } from '@/lib/api/organizers';
+import {
+  bumpPlannerMutationIntent,
+  isLatestPlannerMutationIntent,
+} from '@/lib/plan/plannerMutationIntent';
 import { enqueueFestivalPlanMutation, isLikelyOfflinePlannerError } from '@/lib/plan/offlineQueue';
 import {
   festivalRefMatches,
@@ -29,6 +33,7 @@ type ToggleContext = {
   snapshots: Snapshot[];
   ref: FestivalSavedRef;
   nextSaved: boolean;
+  intentSeq: number;
 };
 
 function isTargetQuery(query: Query): boolean {
@@ -134,6 +139,7 @@ export function useTogglePlanFestivalMutation() {
     },
     onMutate: async (input): Promise<ToggleContext> => {
       const ref = buildRef(input);
+      const intentSeq = bumpPlannerMutationIntent('festival', input.festivalId);
       const predicate = { predicate: isTargetQuery, type: 'all' as const };
       await queryClient.cancelQueries(predicate);
       const snapshots = queryClient
@@ -158,10 +164,13 @@ export function useTogglePlanFestivalMutation() {
         if (next !== data) queryClient.setQueryData(queryKey, next);
       }
 
-      return { snapshots, ref, nextSaved };
+      return { snapshots, ref, nextSaved, intentSeq };
     },
     onError: (error, _input, context) => {
       if (!context) return;
+      if (!isLatestPlannerMutationIntent('festival', context.ref.festivalId, context.intentSeq)) {
+        return;
+      }
       if (isLikelyOfflinePlannerError(error)) {
         void enqueueFestivalPlanMutation(context.ref.festivalId, context.nextSaved);
         return;
@@ -172,6 +181,9 @@ export function useTogglePlanFestivalMutation() {
     },
     onSuccess: (result, _input, context) => {
       if (!context) return;
+      if (!isLatestPlannerMutationIntent('festival', context.ref.festivalId, context.intentSeq)) {
+        return;
+      }
       const nextSaved = Boolean(result?.saved);
       for (const [queryKey, data] of queryClient.getQueriesData({ predicate: isTargetQuery, type: 'all' })) {
         const next = patchAllQueries(queryKey, data, context.ref, nextSaved);
