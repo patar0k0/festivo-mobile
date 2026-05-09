@@ -644,9 +644,6 @@ export default function FestivalDetailScreen() {
           {durationLine ? (
             <QuickTile icon="hourglass-outline" label="Продължителност" value={durationLine} />
           ) : null}
-          {organizerName ? (
-            <QuickTile icon="people-outline" label="Организатор" value={organizerName} />
-          ) : null}
         </Reanimated.View>
 
         {description.length > 0 ? (
@@ -727,12 +724,9 @@ export default function FestivalDetailScreen() {
           </Reanimated.View>
         ) : null}
 
-        {hasMapCoords ? (
+        {(hasMapCoords || mapAddressLine) ? (
           <Reanimated.View entering={FadeInDown.duration(260).delay(200)}>
             <FestivalMapPreview
-              latitude={lat!}
-              longitude={lng!}
-              title={data.title}
               addressLine={mapAddressLine}
               onOpenMaps={handleOpenMaps}
             />
