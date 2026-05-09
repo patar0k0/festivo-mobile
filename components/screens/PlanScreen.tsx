@@ -27,6 +27,7 @@ import {
   type FestivalScheduleItem,
 } from '@/lib/api/festivals';
 import { type MobilePlanReminderType } from '@/lib/api/mobilePlan';
+import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { formatScheduleTime, getFestivalScheduleTimeZone, groupFestivalSchedule } from '@/lib/plan/schedule';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 import { useTogglePlanFestivalMutation } from '@/lib/query/useTogglePlanFestivalMutation';
@@ -462,7 +463,9 @@ export default function PlanScreen() {
                 key={entry.scheduleItemId}
                 onPress={() =>
                   router.push(
-                    `/festival/${entry.festivalSlug}?scheduleDay=${encodeURIComponent(entry.date.slice(0, 10))}`,
+                    festivalDetailHref(entry.festivalSlug, {
+                      scheduleDay: entry.date.slice(0, 10),
+                    }),
                   )
                 }
                 style={({ pressed }) => [
@@ -494,7 +497,9 @@ export default function PlanScreen() {
                 key={`${entry.scheduleItemId}-up`}
                 onPress={() =>
                   router.push(
-                    `/festival/${entry.festivalSlug}?scheduleDay=${encodeURIComponent(entry.date.slice(0, 10))}`,
+                    festivalDetailHref(entry.festivalSlug, {
+                      scheduleDay: entry.date.slice(0, 10),
+                    }),
                   )
                 }
                 style={({ pressed }) => [
@@ -520,7 +525,7 @@ export default function PlanScreen() {
       {viewMode === 'calendar' ? (
         <PlannerCalendar
           groups={calendarGroups}
-          onPressEntry={(entry) => router.push(`/festival/${entry.festivalSlug}`)}
+          onPressEntry={(entry) => router.push(festivalDetailHref(entry.festivalSlug))}
         />
       ) : (
       <>
@@ -537,7 +542,7 @@ export default function PlanScreen() {
                   <FestivalCard
                     variant="compact"
                     item={item}
-                    onPressCard={() => router.push(`/festival/${item.slug}`)}
+                    onPressCard={() => router.push(festivalDetailHref(item.slug))}
                     onPressSave={() => togglePlanMutation.mutate({ festivalId: item.festivalId, slug: item.slug, festival: item })}
                     saveDisabled={removing}
                   />
@@ -565,8 +570,9 @@ export default function PlanScreen() {
                       <Pressable
                         onPress={() => {
                           const day = firstPlannedDayYmd(plannedScheduleEntries, item.festivalId);
-                          const qs = day ? `?scheduleDay=${encodeURIComponent(day)}` : '';
-                          router.push(`/festival/${item.slug}${qs}`);
+                          router.push(
+                            day ? festivalDetailHref(item.slug, { scheduleDay: day }) : festivalDetailHref(item.slug),
+                          );
                         }}
                         style={styles.secondaryChip}>
                         <Text style={styles.secondaryChipText}>Програма</Text>
@@ -605,7 +611,7 @@ export default function PlanScreen() {
                   <FestivalCard
                     variant="compact"
                     item={item}
-                    onPressCard={() => router.push(`/festival/${item.slug}`)}
+                    onPressCard={() => router.push(festivalDetailHref(item.slug))}
                     onPressSave={() => togglePlanMutation.mutate({ festivalId: item.festivalId, slug: item.slug, festival: item })}
                   />
                 </View>

@@ -1,8 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
+import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
+import { PlatformPressable } from '@react-navigation/elements';
 import { Tabs } from 'expo-router';
+import { StyleSheet } from 'react-native';
 
 import { MAIN_TAB_BAR_HEIGHT } from '@/lib/navigation/mainTabBar';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
+
+function PlanTabBarButton(props: BottomTabBarButtonProps) {
+  return (
+    <PlatformPressable
+      {...props}
+      style={(state) => [
+        typeof props.style === 'function' ? props.style(state) : props.style,
+        styles.planTabButton,
+      ]}
+    />
+  );
+}
 
 export default function TabsGroupLayout() {
   useMobilePlanState();
@@ -13,9 +28,10 @@ export default function TabsGroupLayout() {
         tabBarActiveTintColor: '#111827',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
+          display: 'flex',
           height: MAIN_TAB_BAR_HEIGHT,
-          paddingTop: 6,
-          paddingBottom: 6,
+          paddingTop: 4,
+          paddingBottom: 4,
           borderTopWidth: 1,
           borderTopColor: '#EEEEEE',
           backgroundColor: '#FFFFFF',
@@ -41,27 +57,37 @@ export default function TabsGroupLayout() {
         }}
       />
       <Tabs.Screen
-        name="following"
+        name="plan"
         options={{
-          title: 'Следвани',
+          title: 'Моят план',
+          tabBarButton: PlanTabBarButton,
+          tabBarLabelStyle: { fontSize: 13, fontWeight: '700' },
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name="people-outline" size={focused ? 24 : 22} color={color} />
+            <Ionicons
+              name={focused ? 'bookmark' : 'bookmark-outline'}
+              size={focused ? 36 : 32}
+              color={color}
+            />
           ),
         }}
       />
       <Tabs.Screen
-        name="plan"
+        name="following"
         options={{
-          title: 'Моят план',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name="bookmark-outline" size={focused ? 24 : 22} color={color} />
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen
         name="saved"
         options={{
           href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="festival"
+        options={{
+          href: null,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -76,3 +102,11 @@ export default function TabsGroupLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  planTabButton: {
+    marginTop: -10,
+    justifyContent: 'flex-end',
+    paddingBottom: 2,
+  },
+});

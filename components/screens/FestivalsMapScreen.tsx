@@ -24,6 +24,7 @@ import type { FestivalListItem } from '@/lib/api/festivals';
 import { getFestivals } from '@/lib/api/festivals';
 import { trackEvent } from '@/lib/analytics/track';
 import { BULGARIA_REGION, getSofiaRegion, isValidCoordinatePair, looksLikeBulgaria } from '@/lib/map/coordinates';
+import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 
 const MAX_VISIBLE_POINTS = 90;
 const MAX_RAW_VIEWPORT = 200;
@@ -451,7 +452,7 @@ export default function FestivalsMapScreen() {
   const openDetail = useCallback(
     (item: FestivalListItem) => {
       void trackEvent({ event: 'map_interaction', source: 'open_card', slug: item.slug, festival_id: item.festivalId });
-      router.push(`/festival/${item.slug}`);
+      router.push(festivalDetailHref(item.slug));
     },
     [router],
   );

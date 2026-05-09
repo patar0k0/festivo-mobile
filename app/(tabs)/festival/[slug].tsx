@@ -25,7 +25,7 @@ import {
 import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FestivalDetailStickyBar, FESTIVAL_STICKY_BAR_OFFSET } from '@/components/festival/FestivalDetailStickyBar';
+import { FestivalDetailStickyBar } from '@/components/festival/FestivalDetailStickyBar';
 import { FestivalMapPreview } from '@/components/festival/FestivalMapPreview';
 import { FestivalScheduleSectionList } from '@/components/festival/FestivalScheduleSectionList';
 import { VerifiedBadge } from '@/components/organizer/VerifiedBadge';
@@ -37,7 +37,7 @@ import type { FestivalDetail, FestivalListItem } from '@/lib/api/festivals';
 import { getFestival, getFestivals } from '@/lib/api/festivals';
 import { trackEvent } from '@/lib/analytics/track';
 import { formatDateRangeRelative } from '@/lib/festival/relativeDate';
-import { useBottomOverlayInset } from '@/lib/navigation/useBottomOverlayInset';
+import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { buildLocationQuery, openInMaps } from '@/lib/map/openInMaps';
 import { isValidCoordinatePair, looksLikeBulgaria } from '@/lib/map/coordinates';
 import { trackRecentlyViewedFestival } from '@/lib/personalization/recentlyViewed';
@@ -58,8 +58,6 @@ const HERO_H = Platform.OS === 'android' ? 268 : 300;
 const GALLERY_INITIAL_LIMIT = 4;
 const DESC_COLLAPSED_LINES = 6;
 const DESC_READ_MORE_MIN_CHARS = 200;
-const SCROLL_BOTTOM_EXTRA = 28;
-
 const HERO_PALETTE = ['#4F46E5', '#0EA5E9', '#059669', '#D97706', '#7C3AED', '#DB2777'];
 
 function heroFallbackColor(slug: string): string {
@@ -277,7 +275,6 @@ export default function FestivalDetailScreen() {
     : scheduleDayParamRaw;
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const bottomOverlayInset = useBottomOverlayInset();
   const toggleSavedMutation = useToggleSavedMutation();
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
@@ -335,9 +332,6 @@ export default function FestivalDetailScreen() {
       source: 'mobile_detail',
     });
   }, [data]);
-
-  const stickyBottomReserve =
-    FESTIVAL_STICKY_BAR_OFFSET + bottomOverlayInset + SCROLL_BOTTOM_EXTRA;
 
   useFocusEffect(
     useCallback(() => {
@@ -613,9 +607,21 @@ export default function FestivalDetailScreen() {
           />
         </Reanimated.View>
 
+        <Reanimated.View entering={FadeInDown.duration(260).delay(40)}>
+          <FestivalDetailStickyBar
+            saved={data.saved}
+            saveBusy={isSaving}
+            onSave={() => onToggleSave(data)}
+            onShare={handleShare}
+            onMaps={handleOpenMaps}
+            onCalendar={handleCalendar}
+            calendarDisabled={!getFestivalIcsUrl(data.slug)}
+          />
+        </Reanimated.View>
+
         <Reanimated.View
           style={styles.quickGrid}
-          entering={FadeInDown.duration(260).delay(40)}>
+          entering={FadeInDown.duration(260).delay(70)}>
           {data.city ? <QuickTile icon="location-outline" label="Локация" value={data.city} /> : null}
           <QuickTile
             icon="calendar-outline"
@@ -766,7 +772,7 @@ export default function FestivalDetailScreen() {
                   <RelatedMiniCard
                     item={item}
                     saving={pendingIds.has(item.festivalId)}
-                    onPressCard={() => router.push(`/festival/${item.slug}`)}
+                    onPressCard={() => router.push(festivalDetailHref(item.slug))}
                     onPressSave={() => {
                       setPendingIds((prev) => new Set(prev).add(item.festivalId));
                       toggleSavedMutation.mutate(
@@ -807,7 +813,7 @@ export default function FestivalDetailScreen() {
           detail={data}
           listHeader={scheduleListHeader}
           listFooter={scheduleListFooter}
-          contentContainerBottom={stickyBottomReserve}
+          contentContainerBottom={insets.bottom + 32}
           initialScheduleDay={scheduleDayParam}
           isScheduleItemPlanned={planQuery.isScheduleItemPlanned}
           toggleScheduleItemMutation={toggleScheduleItemMutation}
@@ -816,21 +822,14 @@ export default function FestivalDetailScreen() {
         <ScrollView
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scrollContentBottom, { paddingBottom: stickyBottomReserve }]}>
+          contentContainerStyle={[
+            styles.scrollContentBottom,
+            { paddingBottom: insets.bottom + 32 },
+          ]}>
           {scheduleListHeader}
           {scheduleListFooter}
         </ScrollView>
       )}
-
-      <FestivalDetailStickyBar
-        saved={data.saved}
-        saveBusy={isSaving}
-        onSave={() => onToggleSave(data)}
-        onShare={handleShare}
-        onMaps={handleOpenMaps}
-        onCalendar={handleCalendar}
-        calendarDisabled={!getFestivalIcsUrl(data.slug)}
-      />
     </View>
   );
 }

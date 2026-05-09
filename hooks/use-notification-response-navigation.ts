@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 
 import { apiFetch } from '@/lib/api/client';
 import { trackEvent } from '@/lib/analytics/track';
+import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { isExpoGo } from '@/lib/push/isExpoGo';
 
 type NotificationRouteTarget =
@@ -103,7 +104,7 @@ function navigateFromResponse(
     if (target.type === 'festival') {
       void apiFetch(`/api/mobile/festivals/${encodeURIComponent(target.slug)}`).then((res) => {
         if (res.ok) {
-          router.push(`/festival/${target.slug}`);
+          router.push(festivalDetailHref(target.slug));
         } else {
           router.push('/notification-fallback');
         }

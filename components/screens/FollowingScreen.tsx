@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { followOrganizer, unfollowOrganizer } from "@/lib/api/organizerFollow";
 import { getFollowFeed, type FollowFeedItem, type FollowFeedPage } from "@/lib/api/followFeed";
 import { trackEvent } from "@/lib/analytics/track";
+import { festivalDetailHref } from "@/lib/navigation/festivalDetailHref";
 
 function ProofPill({ label, onPress }: { label: string; onPress: () => void }) {
   return (
@@ -147,7 +148,7 @@ export default function FollowingScreen() {
       source: "following_feed",
       metadata: { explanation_code: explanationCode },
     });
-    router.push(`/festival/${slug}`);
+    router.push(festivalDetailHref(slug));
   }, [router]);
 
   const onOpenOrganizer = useCallback((organizerId: string) => {

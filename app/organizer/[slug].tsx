@@ -29,6 +29,7 @@ import type { FestivalListItem } from '@/lib/api/festivals';
 import { getOrganizerBySlug } from '@/lib/api/organizers';
 import { useAuth } from '@/lib/auth/useAuth';
 import { useToggleOrganizerFollowMutation } from '@/lib/query/useToggleOrganizerFollowMutation';
+import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 import { getOrganizerPublicUrl } from '@/lib/site';
 
@@ -517,7 +518,7 @@ export default function OrganizerProfileScreen() {
           <FestivalCard
             variant="compact"
             item={item}
-            onPressCard={() => router.push(`/festival/${item.slug}`)}
+            onPressCard={() => router.push(festivalDetailHref(item.slug))}
             onPressSave={() => onToggleSave(item)}
             saveDisabled={pendingIds.has(item.festivalId)}
           />

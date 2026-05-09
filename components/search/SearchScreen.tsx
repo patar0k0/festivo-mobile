@@ -29,6 +29,7 @@ import { getFestivalBySlug } from '@/lib/api/festivals';
 import { searchFestivals } from '@/lib/api/search';
 import { groupSearchResultsByDate, type GroupedSearchSection } from '@/lib/search/groupSearchResults';
 import { addRecentSearch, getRecentSearches } from '@/lib/search/recentSearches';
+import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 import { queryClient } from '@/lib/queryClient';
 
@@ -169,7 +170,7 @@ export default function SearchScreen() {
           gcTime: 1000 * 60 * 30,
         });
       }
-      router.push(`/festival/${item.slug}`);
+      router.push(festivalDetailHref(item.slug));
     },
     [router],
   );

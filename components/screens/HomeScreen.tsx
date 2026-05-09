@@ -29,6 +29,7 @@ import { getPersonalizedSections, type PersonalizedSection } from '@/lib/api/rec
 import { debugLogRare } from '@/lib/debug/mobileDiagnosticsHelpers';
 import { formatDateRangeRelative, getRelativeDateLabel } from '@/lib/festival/relativeDate';
 import { getRecentlyViewedFestivals, type RecentlyViewedFestival } from '@/lib/personalization/recentlyViewed';
+import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 import { queryClient } from '@/lib/queryClient';
@@ -903,7 +904,7 @@ export default function HomeScreen() {
           gcTime: 1000 * 60 * 30,
         });
       }
-      router.push(`/festival/${item.slug}`);
+      router.push(festivalDetailHref(item.slug));
     },
     [router],
   );

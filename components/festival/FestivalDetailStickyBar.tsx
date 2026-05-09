@@ -1,16 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { memo } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { festivalUi } from '@/components/ui/FestivalCard';
-import { useBottomTabBarOverlayHeight } from '@/lib/navigation/useBottomTabBarOverlayHeight';
 
 const BAR_HEIGHT = 50;
-/** Matches `styles.inner` `paddingTop` + `minHeight`. */
-const INNER_TOP_AND_BODY_MIN = 5 + BAR_HEIGHT;
 
 type Props = {
   saved: boolean;
@@ -23,9 +19,6 @@ type Props = {
   calendarDisabled?: boolean;
 };
 
-/** Minimum vertical size of the sticky bar (content), excluding bottom overlay inset. */
-export const FESTIVAL_STICKY_BAR_OFFSET = INNER_TOP_AND_BODY_MIN;
-
 export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
   saved,
   saveBusy,
@@ -36,13 +29,8 @@ export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
   mapsDisabled,
   calendarDisabled,
 }: Props) {
-  const tabBarOverlayHeight = useBottomTabBarOverlayHeight();
-
   return (
-    <SafeAreaView
-      edges={['bottom']}
-      style={[styles.wrap, { paddingBottom: tabBarOverlayHeight }]}
-      pointerEvents="box-none">
+    <View style={styles.wrap} pointerEvents="box-none">
       <View style={styles.inner}>
         <ActionIcon
           label={saved ? 'Запазено' : 'Запази'}
@@ -62,7 +50,7 @@ export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
           disabled={calendarDisabled}
         />
       </View>
-    </SafeAreaView>
+    </View>
   );
 });
 
@@ -118,10 +106,7 @@ function ActionIcon({
 
 const styles = StyleSheet.create({
   wrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    width: '100%',
     backgroundColor: '#FFFFFF',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E5E7EB',

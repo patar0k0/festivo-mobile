@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { InboxRequestError, fetchInboxPage, markInboxOpened, type InboxItem } from '@/lib/push/inbox';
 
 type InboxStatus = 'loading' | 'ready' | 'error';
@@ -146,7 +147,7 @@ export default function ProfileInboxScreen() {
       if (item.deepLink?.includes('festival/')) {
         const slug = item.deepLink.split('festival/')[1]?.split(/[?#]/)[0];
         if (slug) {
-          router.push(`/festival/${decodeURIComponent(slug)}`);
+          router.push(festivalDetailHref(decodeURIComponent(slug)));
           return;
         }
       }

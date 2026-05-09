@@ -8,6 +8,7 @@ import { festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
 import { useAuth } from '@/lib/auth/useAuth';
 
 const SETTINGS_ROWS: { key: string; label: string }[] = [
+  { key: 'following', label: 'Следвани организатори' },
   { key: 'inbox', label: 'Входящи известия' },
   { key: 'notifications', label: 'Известия' },
   { key: 'onboarding', label: 'Персонализация' },
@@ -17,6 +18,7 @@ const SETTINGS_ROWS: { key: string; label: string }[] = [
 ];
 
 const SETTINGS_ROUTE_BY_KEY: Record<string, string> = {
+  following: '/(tabs)/following',
   inbox: '/profile-inbox',
   notifications: '/profile-notifications',
   onboarding: '/onboarding',

@@ -74,14 +74,6 @@ function RootStack() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen
-          name="festival/[slug]"
-          options={{
-            headerShown: false,
-            animation: 'slide_from_right',
-            animationDuration: 280,
-          }}
-        />
-        <Stack.Screen
           name="organizer/[slug]"
           options={{
             headerShown: false,
