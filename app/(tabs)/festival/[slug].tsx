@@ -80,6 +80,20 @@ function formatTimeShort(raw: string): string | null {
   return t;
 }
 
+function formatDateAbsolute(start: string, end?: string | null): string {
+  const fmt = (d: Date) =>
+    d.toLocaleDateString('bg-BG', { day: 'numeric', month: 'long', year: 'numeric' });
+  const s = new Date(start);
+  if (Number.isNaN(s.getTime())) return start;
+  if (!end?.trim()) return fmt(s);
+  const e = new Date(end);
+  if (Number.isNaN(e.getTime())) return fmt(s);
+  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
+    return `${s.getDate()} – ${e.getDate()} ${e.toLocaleDateString('bg-BG', { month: 'long', year: 'numeric' })}`;
+  }
+  return `${fmt(s)} – ${fmt(e)}`;
+}
+
 function quickDurationLabel(d: FestivalDetail): string | null {
   const { start_date, end_date, start_time, end_time } = d;
   if (!start_date?.trim()) return null;
@@ -577,7 +591,7 @@ export default function FestivalDetailScreen() {
             style={StyleSheet.absoluteFill}
           />
           <View pointerEvents="none" style={[styles.heroTextBlock, { bottom: 14 }]}>
-            <Text style={styles.heroTitle} numberOfLines={2}>
+            <Text style={styles.heroTitle} numberOfLines={3}>
               {data.title}
             </Text>
             <View style={styles.heroChips}>
@@ -622,18 +636,16 @@ export default function FestivalDetailScreen() {
         <Reanimated.View
           style={styles.quickGrid}
           entering={FadeInDown.duration(260).delay(70)}>
-          {data.city ? <QuickTile icon="location-outline" label="Локация" value={data.city} /> : null}
           <QuickTile
             icon="calendar-outline"
             label="Дата"
-            value={dateRangeLine || data.start_date}
+            value={formatDateAbsolute(data.start_date, data.end_date)}
           />
-          {durationLine ? <QuickTile icon="hourglass-outline" label="Продължителност" value={durationLine} /> : null}
+          {durationLine ? (
+            <QuickTile icon="hourglass-outline" label="Продължителност" value={durationLine} />
+          ) : null}
           {organizerName ? (
             <QuickTile icon="people-outline" label="Организатор" value={organizerName} />
-          ) : null}
-          {categoryLabel ? (
-            <QuickTile icon="sparkles-outline" label="Категория" value={categoryLabel} />
           ) : null}
         </Reanimated.View>
 
