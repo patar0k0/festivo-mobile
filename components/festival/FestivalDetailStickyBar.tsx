@@ -13,9 +13,7 @@ type Props = {
   saveBusy: boolean;
   onSave: () => void;
   onShare: () => void;
-  onMaps: () => void;
   onCalendar: () => void;
-  mapsDisabled?: boolean;
   calendarDisabled?: boolean;
 };
 
@@ -24,9 +22,7 @@ export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
   saveBusy,
   onSave,
   onShare,
-  onMaps,
   onCalendar,
-  mapsDisabled,
   calendarDisabled,
 }: Props) {
   return (
@@ -42,7 +38,6 @@ export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
           primary
         />
         <ActionIcon label="Сподели" icon="share-outline" onPress={onShare} />
-        <ActionIcon label="Карта" icon="map-outline" onPress={onMaps} disabled={mapsDisabled} />
         <ActionIcon
           label="Календар"
           icon="calendar-outline"

@@ -627,7 +627,6 @@ export default function FestivalDetailScreen() {
             saveBusy={isSaving}
             onSave={() => onToggleSave(data)}
             onShare={handleShare}
-            onMaps={handleOpenMaps}
             onCalendar={handleCalendar}
             calendarDisabled={!getFestivalIcsUrl(data.slug)}
           />
@@ -724,9 +723,12 @@ export default function FestivalDetailScreen() {
           </Reanimated.View>
         ) : null}
 
-        {(hasMapCoords || mapAddressLine) ? (
+        {hasMapCoords ? (
           <Reanimated.View entering={FadeInDown.duration(260).delay(200)}>
             <FestivalMapPreview
+              latitude={lat!}
+              longitude={lng!}
+              title={data.title}
               addressLine={mapAddressLine}
               onOpenMaps={handleOpenMaps}
             />
