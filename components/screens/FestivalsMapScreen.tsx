@@ -28,6 +28,8 @@ import { BULGARIA_REGION, getSofiaRegion, isValidCoordinatePair, looksLikeBulgar
 const MAX_VISIBLE_POINTS = 90;
 const MAX_RAW_VIEWPORT = 200;
 const REGION_DEBOUNCE_MS = 420;
+/** After custom Marker children mount on Android Google Maps, allow one paint cycle then stop tracking (avoids empty snapshots). */
+const ANDROID_MARKER_TRACK_VIEW_MS = 480;
 const CATEGORY_FILTERS = [
   { key: 'all', label: 'Всички' },
   { key: 'music', label: 'Music' },
@@ -57,6 +59,8 @@ type MapDevDiagnostics = {
   clusteredMarkers: number;
   finalRenderedMarkers: number;
   fallbackActivation: MapTier | 'none';
+  /** How Marker children are produced: grid buckets vs one Marker per festival in viewport. */
+  markerLayoutMode: 'grid' | 'raw' | 'none';
 };
 
 function itemCoordinateLoose(item: FestivalListItem): { latitude: number; longitude: number } | null {
@@ -185,6 +189,9 @@ export default function FestivalsMapScreen() {
   const [searchAreaDirty, setSearchAreaDirty] = useState(false);
   const mapRef = useRef<MapView | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [androidMapTracksViewChanges, setAndroidMapTracksViewChanges] = useState(
+    () => Platform.OS === 'android',
+  );
 
   const { data, isPending, isError, refetch, isRefetching } = useQuery({
     queryKey: ['festivals', 'map', 'trending', activeCategory],
@@ -279,6 +286,8 @@ export default function FestivalsMapScreen() {
     }
 
     const finalRenderedMarkers = clustered.reduce((n, c) => n + c.items.length, 0);
+    const markerLayoutMode: MapDevDiagnostics['markerLayoutMode'] =
+      clustered.length === 0 ? 'none' : tier === 'B' ? 'raw' : 'grid';
     const devDiagnostics: MapDevDiagnostics = {
       fetched,
       validCoordCount,
@@ -291,10 +300,57 @@ export default function FestivalsMapScreen() {
       clusteredMarkers: clustered.length,
       finalRenderedMarkers,
       fallbackActivation: tier === 'A' ? 'none' : tier,
+      markerLayoutMode,
     };
 
     return { clusteredPoints: clustered, devDiagnostics };
   }, [activeRegion, data, pendingRegion, userLoc]);
+
+  const clusterTrackSig = useMemo(() => {
+    if (!clusteredPoints.length) return '';
+    const ids = clusteredPoints.map((c) => c.id);
+    ids.sort();
+    return ids.join('|');
+  }, [clusteredPoints]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    if (!clusterTrackSig) {
+      setAndroidMapTracksViewChanges(false);
+      if (__DEV__) {
+        console.log('[FestivalsMap][markerHydration]', {
+          markerHydrationActive: false,
+          tracksViewChanges: false,
+          reason: 'no_cluster_markers',
+        });
+      }
+      return;
+    }
+
+    setAndroidMapTracksViewChanges(true);
+    if (__DEV__) {
+      console.log('[FestivalsMap][markerHydration]', {
+        markerHydrationActive: true,
+        tracksViewChanges: true,
+        clusterMarkerCount: clusterTrackSig.split('|').length,
+        clusterTrackSigLength: clusterTrackSig.length,
+      });
+    }
+
+    const timer = setTimeout(() => {
+      setAndroidMapTracksViewChanges(false);
+      if (__DEV__) {
+        console.log('[FestivalsMap][markerHydration]', {
+          markerHydrationActive: false,
+          tracksViewChanges: false,
+          afterMs: ANDROID_MARKER_TRACK_VIEW_MS,
+        });
+      }
+    }, ANDROID_MARKER_TRACK_VIEW_MS);
+
+    return () => clearTimeout(timer);
+  }, [clusterTrackSig]);
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -322,6 +378,7 @@ export default function FestivalsMapScreen() {
         C_cluster_allBg_cap90: d.tierCInputCount,
         D_cluster_allValid_cap90: d.tierDInputCount,
       },
+      markerLayoutMode: d.markerLayoutMode,
       activeCategory,
     });
   }, [activeCategory, devDiagnostics]);
@@ -471,7 +528,9 @@ export default function FestivalsMapScreen() {
               coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
               title={isSingle ? item.title : `${cluster.items.length} festivals`}
               onPress={() => onSelectCluster(cluster)}
-              tracksViewChanges={false}
+              tracksViewChanges={
+                Platform.OS === 'android' ? androidMapTracksViewChanges : false
+              }
               anchor={{ x: 0.5, y: 0.5 }}
             >
               <View style={[styles.clusterMarker, isActive && styles.clusterMarkerActive]}>

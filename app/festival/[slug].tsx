@@ -37,6 +37,7 @@ import type { FestivalDetail, FestivalListItem } from '@/lib/api/festivals';
 import { getFestival, getFestivals } from '@/lib/api/festivals';
 import { trackEvent } from '@/lib/analytics/track';
 import { formatDateRangeRelative } from '@/lib/festival/relativeDate';
+import { useBottomOverlayInset } from '@/lib/navigation/useBottomOverlayInset';
 import { buildLocationQuery, openInMaps } from '@/lib/map/openInMaps';
 import { isValidCoordinatePair, looksLikeBulgaria } from '@/lib/map/coordinates';
 import { trackRecentlyViewedFestival } from '@/lib/personalization/recentlyViewed';
@@ -276,6 +277,7 @@ export default function FestivalDetailScreen() {
     : scheduleDayParamRaw;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const bottomOverlayInset = useBottomOverlayInset();
   const toggleSavedMutation = useToggleSavedMutation();
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
@@ -334,7 +336,8 @@ export default function FestivalDetailScreen() {
     });
   }, [data]);
 
-  const stickyBottomReserve = FESTIVAL_STICKY_BAR_OFFSET + Math.max(insets.bottom, 10) + SCROLL_BOTTOM_EXTRA;
+  const stickyBottomReserve =
+    FESTIVAL_STICKY_BAR_OFFSET + bottomOverlayInset + SCROLL_BOTTOM_EXTRA;
 
   useFocusEffect(
     useCallback(() => {

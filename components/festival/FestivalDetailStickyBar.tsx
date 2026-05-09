@@ -1,13 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { memo } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { festivalUi } from '@/components/ui/FestivalCard';
+import { useBottomTabBarOverlayHeight } from '@/lib/navigation/useBottomTabBarOverlayHeight';
 
 const BAR_HEIGHT = 50;
+/** Matches `styles.inner` `paddingTop` + `minHeight`. */
+const INNER_TOP_AND_BODY_MIN = 5 + BAR_HEIGHT;
 
 type Props = {
   saved: boolean;
@@ -20,7 +23,8 @@ type Props = {
   calendarDisabled?: boolean;
 };
 
-export const FESTIVAL_STICKY_BAR_OFFSET = BAR_HEIGHT;
+/** Minimum vertical size of the sticky bar (content), excluding bottom overlay inset. */
+export const FESTIVAL_STICKY_BAR_OFFSET = INNER_TOP_AND_BODY_MIN;
 
 export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
   saved,
@@ -32,11 +36,13 @@ export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
   mapsDisabled,
   calendarDisabled,
 }: Props) {
-  const insets = useSafeAreaInsets();
-  const bottomPad = Math.max(insets.bottom, 4);
+  const tabBarOverlayHeight = useBottomTabBarOverlayHeight();
 
   return (
-    <View style={[styles.wrap, { paddingBottom: bottomPad }]} pointerEvents="box-none">
+    <SafeAreaView
+      edges={['bottom']}
+      style={[styles.wrap, { paddingBottom: tabBarOverlayHeight }]}
+      pointerEvents="box-none">
       <View style={styles.inner}>
         <ActionIcon
           label={saved ? 'Запазено' : 'Запази'}
@@ -56,7 +62,7 @@ export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
           disabled={calendarDisabled}
         />
       </View>
-    </View>
+    </SafeAreaView>
   );
 });
 

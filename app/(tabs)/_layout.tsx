@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+
+import { MAIN_TAB_BAR_HEIGHT } from '@/lib/navigation/mainTabBar';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 
 export default function TabsGroupLayout() {
@@ -11,7 +13,7 @@ export default function TabsGroupLayout() {
         tabBarActiveTintColor: '#111827',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
-          height: 64,
+          height: MAIN_TAB_BAR_HEIGHT,
           paddingTop: 6,
           paddingBottom: 6,
           borderTopWidth: 1,
