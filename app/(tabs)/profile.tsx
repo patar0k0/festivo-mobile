@@ -18,7 +18,7 @@ const SETTINGS_ROWS: { key: string; label: string }[] = [
 ];
 
 const SETTINGS_ROUTE_BY_KEY: Record<string, string> = {
-  following: '/(tabs)/following',
+  following: '/profile-following-organizers',
   inbox: '/profile-inbox',
   notifications: '/profile-notifications',
   onboarding: '/onboarding',

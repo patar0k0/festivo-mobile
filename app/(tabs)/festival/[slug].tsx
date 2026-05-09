@@ -582,6 +582,23 @@ export default function FestivalDetailScreen() {
               ) : null}
             </View>
           </View>
+          <Pressable
+            style={[styles.heroHeart, { top: insets.top + 10 }]}
+            onPress={() => onToggleSave(data)}
+            disabled={isSaving}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel={planQuery.isSaved(data.festivalId) ? 'Премахни от харесани' : 'Харесай'}>
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Ionicons
+                name={planQuery.isSaved(data.festivalId) ? 'heart' : 'heart-outline'}
+                size={24}
+                color="#FFFFFF"
+              />
+            )}
+          </Pressable>
         </Reanimated.View>
 
         <Reanimated.View entering={FadeInDown.duration(260).delay(40)}>
@@ -834,8 +851,18 @@ const styles = StyleSheet.create({
   heroTextBlock: {
     position: 'absolute',
     left: festivalUi.screenPadding,
-    right: festivalUi.screenPadding + 48,
+    right: festivalUi.screenPadding + 56,
     bottom: 14,
+  },
+  heroHeart: {
+    position: 'absolute',
+    right: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.38)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroTitle: {
     color: '#FFFFFF',
