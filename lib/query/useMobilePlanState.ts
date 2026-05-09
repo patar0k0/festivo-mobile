@@ -96,6 +96,7 @@ export function useMobilePlanState() {
   });
 
   const savedFestivalIds = useMemo(() => query.data?.savedFestivalIds ?? [], [query.data?.savedFestivalIds]);
+  const savedFestivals = useMemo(() => query.data?.savedFestivals ?? [], [query.data?.savedFestivals]);
   const savedFestivalIdSet = useMemo(() => new Set(savedFestivalIds), [savedFestivalIds]);
   const savedScheduleItemIds = useMemo(
     () => query.data?.savedScheduleItemIds ?? [],
@@ -178,6 +179,7 @@ export function useMobilePlanState() {
   return {
     ...query,
     savedFestivalIds,
+    savedFestivals,
     savedScheduleItemIds,
     reminders,
     stats,

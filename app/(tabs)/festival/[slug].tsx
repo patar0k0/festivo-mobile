@@ -118,33 +118,6 @@ function quickDurationLabel(d: FestivalDetail): string | null {
   return null;
 }
 
-function HeroBookmarkButton({
-  filled,
-  isBusy,
-  onPress,
-  top,
-  right,
-}: {
-  filled: boolean;
-  isBusy?: boolean;
-  onPress: () => void;
-  top: number;
-  right: number;
-}) {
-  return (
-    <PressableScale
-      onPress={onPress}
-      pressedScale={0.92}
-      style={[styles.heroBookmark, { top, right }, isBusy && styles.heroBookmarkSaving]}
-      hitSlop={8}>
-      {isBusy ? (
-        <ActivityIndicator size="small" color="#FFFFFF" />
-      ) : (
-        <AnimatedBookmark filled={filled} size={22} color="#FFFFFF" />
-      )}
-    </PressableScale>
-  );
-}
 
 function GalleryLightbox({
   uri,
@@ -443,9 +416,6 @@ export default function FestivalDetailScreen() {
     [toggleSavedMutation],
   );
 
-  const bookmarkTop = insets.top + 10;
-  const bookmarkRight = 14;
-
   const handleShare = useCallback(() => {
     if (!data) return;
     const url = getFestivalPublicUrl(data.slug);
@@ -612,13 +582,6 @@ export default function FestivalDetailScreen() {
               ) : null}
             </View>
           </View>
-          <HeroBookmarkButton
-            filled={data.saved}
-            isBusy={isSaving}
-            onPress={() => onToggleSave(data)}
-            top={bookmarkTop}
-            right={bookmarkRight}
-          />
         </Reanimated.View>
 
         <Reanimated.View entering={FadeInDown.duration(260).delay(40)}>
@@ -939,23 +902,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(253,230,138,0.4)',
   },
   trendChipText: { fontSize: 12, fontWeight: '600', color: '#FFFBEB' },
-  heroBookmark: {
-    position: 'absolute',
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  heroBookmarkSaving: {
-    opacity: 0.85,
-  },
-  heroBookmarkPressed: {
-    opacity: 0.88,
-  },
   quickGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

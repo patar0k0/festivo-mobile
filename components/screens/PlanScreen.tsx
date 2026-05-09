@@ -1,4 +1,4 @@
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import * as Haptics from 'expo-haptics';
@@ -21,11 +21,11 @@ import { AnimatedCount } from '@/components/ui/AnimatedCount';
 import { FestivalCard, festivalUi } from '@/components/ui/FestivalCard';
 import {
   getFestivalBySlug,
-  getFestivals,
   type FestivalDetail,
   type FestivalListItem,
   type FestivalScheduleItem,
 } from '@/lib/api/festivals';
+import type { SavedFestivalBasicDto } from '@/lib/api/mobilePlan';
 import { type MobilePlanReminderType } from '@/lib/api/mobilePlan';
 import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { formatScheduleTime, getFestivalScheduleTimeZone, groupFestivalSchedule } from '@/lib/plan/schedule';
@@ -308,24 +308,25 @@ export default function PlanScreen() {
   const [pickerFestivalId, setPickerFestivalId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<PlanViewMode>('festivals');
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
-  const festivalsQuery = useQuery({
-    queryKey: ['festivals', 'plan-catalog'],
-    queryFn: () => getFestivals({ sort: 'trending', limit: 240 }),
-    staleTime: 60_000,
-  });
 
   const reminderMutation = useUpdatePlanReminderMutation();
 
-  const plannedFestivals = useMemo(() => {
-    const idSet = new Set(planQuery.savedFestivalIds);
-    const merged = (festivalsQuery.data ?? []).filter((f) => idSet.has(f.festivalId));
-    return merged.sort((a, b) => {
-      const aTime = Date.parse(a.start_date);
-      const bTime = Date.parse(b.start_date);
-      if (!Number.isFinite(aTime) || !Number.isFinite(bTime)) return a.title.localeCompare(b.title);
-      return aTime - bTime;
-    });
-  }, [festivalsQuery.data, planQuery.savedFestivalIds]);
+  const plannedFestivals = useMemo((): FestivalListItem[] => {
+    return planQuery.savedFestivals.map((f: SavedFestivalBasicDto) => ({
+      festivalId: f.festivalId,
+      slug: f.slug,
+      title: f.title,
+      city: f.city ?? '',
+      start_date: f.start_date ?? '',
+      end_date: f.end_date ?? '',
+      image_url: f.image_url,
+      saved: true,
+      organizer_name: f.organizer_name,
+      category: f.category,
+      is_verified: f.is_verified,
+      is_promoted: false,
+    }));
+  }, [planQuery.savedFestivals]);
 
   const plannedDetailQueries = useQueries({
     queries: plannedFestivals.map((festival) => ({
@@ -397,17 +398,17 @@ export default function PlanScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   }, [grouped.this_weekend.length, grouped.this_week.length, grouped.upcoming.length, grouped.later.length, grouped.past.length]);
 
-  const isRefreshing = festivalsQuery.isRefetching || planQuery.isRefetching;
+  const isRefreshing = planQuery.isRefetching;
 
   const onRefresh = () => {
-    void Promise.all([festivalsQuery.refetch(), planQuery.refetch()]);
+    void planQuery.refetch();
   };
 
   const openReminderPicker = (festivalId: string) => {
     setPickerFestivalId(festivalId);
   };
 
-  if (planQuery.isPending || festivalsQuery.isPending) {
+  if (planQuery.isPending) {
     return (
       <View style={[styles.center, { paddingTop: insets.top + 20 }]}>
         <ActivityIndicator size="large" color={festivalUi.colors.text} />
