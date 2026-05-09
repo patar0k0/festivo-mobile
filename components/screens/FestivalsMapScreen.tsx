@@ -26,6 +26,7 @@ import { trackEvent } from '@/lib/analytics/track';
 import { BULGARIA_REGION, getSofiaRegion, isValidCoordinatePair, looksLikeBulgaria } from '@/lib/map/coordinates';
 
 const MAX_VISIBLE_POINTS = 90;
+const MAX_RAW_VIEWPORT = 200;
 const REGION_DEBOUNCE_MS = 420;
 const CATEGORY_FILTERS = [
   { key: 'all', label: 'Всички' },
@@ -42,13 +43,135 @@ type ClusterPoint = {
   items: FestivalListItem[];
 };
 
-function itemCoordinate(item: FestivalListItem): { latitude: number; longitude: number } | null {
+type MapTier = 'A' | 'B' | 'C' | 'D';
+
+type MapDevDiagnostics = {
+  fetched: number;
+  validCoordCount: number;
+  bgValidCount: number;
+  viewportBgCount: number;
+  tierAInputCount: number;
+  tierBInputCount: number;
+  tierCInputCount: number;
+  tierDInputCount: number;
+  clusteredMarkers: number;
+  finalRenderedMarkers: number;
+  fallbackActivation: MapTier | 'none';
+};
+
+function itemCoordinateLoose(item: FestivalListItem): { latitude: number; longitude: number } | null {
   const lat = item.lat;
   const lng = item.lng;
   if (lat == null || lng == null) return null;
   if (!isValidCoordinatePair(lat, lng)) return null;
-  if (!looksLikeBulgaria(lat, lng)) return null;
   return { latitude: lat, longitude: lng };
+}
+
+function itemCoordinateBg(item: FestivalListItem): { latitude: number; longitude: number } | null {
+  const c = itemCoordinateLoose(item);
+  if (!c) return null;
+  if (!looksLikeBulgaria(c.latitude, c.longitude)) return null;
+  return c;
+}
+
+function resolveMapCoordinate(item: FestivalListItem): { latitude: number; longitude: number } | null {
+  return itemCoordinateBg(item) ?? itemCoordinateLoose(item);
+}
+
+function filterViewport(
+  items: FestivalListItem[],
+  coordAt: (item: FestivalListItem) => { latitude: number; longitude: number } | null,
+  region: Region | null,
+): FestivalListItem[] {
+  if (!region) return items;
+  const latMin = region.latitude - region.latitudeDelta / 2;
+  const latMax = region.latitude + region.latitudeDelta / 2;
+  const lngMin = region.longitude - region.longitudeDelta / 2;
+  const lngMax = region.longitude + region.longitudeDelta / 2;
+  return items.filter((item) => {
+    const c = coordAt(item);
+    if (!c) return false;
+    return c.latitude >= latMin && c.latitude <= latMax && c.longitude >= lngMin && c.longitude <= lngMax;
+  });
+}
+
+function sortByUserDistance(
+  items: FestivalListItem[],
+  coordAt: (item: FestivalListItem) => { latitude: number; longitude: number } | null,
+  userLoc: { latitude: number; longitude: number } | null,
+): FestivalListItem[] {
+  const copy = [...items];
+  if (userLoc && copy.length > 1) {
+    copy.sort((a, b) => {
+      const ca = coordAt(a);
+      const cb = coordAt(b);
+      if (!ca || !cb) return 0;
+      const da = (ca.latitude - userLoc.latitude) ** 2 + (ca.longitude - userLoc.longitude) ** 2;
+      const db = (cb.latitude - userLoc.latitude) ** 2 + (cb.longitude - userLoc.longitude) ** 2;
+      return da - db;
+    });
+  }
+  return copy;
+}
+
+function buildGridClusters(
+  markerItems: FestivalListItem[],
+  region: Region | null,
+  coordAt: (item: FestivalListItem) => { latitude: number; longitude: number } | null,
+): ClusterPoint[] {
+  if (!markerItems.length) return [];
+  if (!region) {
+    return markerItems.flatMap((item) => {
+      const c = coordAt(item);
+      if (!c) return [];
+      return [
+        {
+          id: `single:${item.festivalId}`,
+          latitude: c.latitude,
+          longitude: c.longitude,
+          items: [item],
+        },
+      ];
+    });
+  }
+  const cellLat = Math.max(0.015, region.latitudeDelta / 11);
+  const cellLng = Math.max(0.015, region.longitudeDelta / 11);
+  const clusters = new Map<string, ClusterPoint>();
+  for (const item of markerItems) {
+    const c = coordAt(item);
+    if (!c) continue;
+    const y = Math.floor(c.latitude / cellLat);
+    const x = Math.floor(c.longitude / cellLng);
+    const key = `${x}:${y}`;
+    const existing = clusters.get(key);
+    if (!existing) {
+      clusters.set(key, { id: key, latitude: c.latitude, longitude: c.longitude, items: [item] });
+    } else {
+      existing.items.push(item);
+      const n = existing.items.length;
+      existing.latitude = (existing.latitude * (n - 1) + c.latitude) / n;
+      existing.longitude = (existing.longitude * (n - 1) + c.longitude) / n;
+    }
+  }
+  return [...clusters.values()];
+}
+
+function buildRawViewportClusters(
+  markerItems: FestivalListItem[],
+  coordAt: (item: FestivalListItem) => { latitude: number; longitude: number } | null,
+): ClusterPoint[] {
+  return markerItems.flatMap((item) => {
+    const c = coordAt(item);
+    if (!c) return [];
+    return [
+      {
+        id: `raw:${item.festivalId}`,
+        latitude: c.latitude,
+        longitude: c.longitude,
+        items: [item],
+      },
+    ];
+  });
 }
 
 export default function FestivalsMapScreen() {
@@ -96,71 +219,112 @@ export default function FestivalsMapScreen() {
     };
   }, []);
 
-  const markerItems = useMemo(() => {
-    if (!data?.length) return [];
-    const withCoords: FestivalListItem[] = [];
-    for (const item of data) {
-      if (itemCoordinate(item)) withCoords.push(item);
-    }
-    if (userLoc && withCoords.length > 1) {
-      withCoords.sort((a, b) => {
-        const ca = itemCoordinate(a)!;
-        const cb = itemCoordinate(b)!;
-        const da = (ca.latitude - userLoc.latitude) ** 2 + (ca.longitude - userLoc.longitude) ** 2;
-        const db = (cb.latitude - userLoc.latitude) ** 2 + (cb.longitude - userLoc.longitude) ** 2;
-        return da - db;
-      });
-    }
+  const { clusteredPoints, devDiagnostics } = useMemo(() => {
+    const list = data ?? [];
+    const fetched = list.length;
     const region = activeRegion ?? pendingRegion;
-    const inViewport = region
-      ? withCoords.filter((item) => {
-          const c = itemCoordinate(item);
-          if (!c) return false;
-          const latMin = region.latitude - region.latitudeDelta / 2;
-          const latMax = region.latitude + region.latitudeDelta / 2;
-          const lngMin = region.longitude - region.longitudeDelta / 2;
-          const lngMax = region.longitude + region.longitudeDelta / 2;
-          return c.latitude >= latMin && c.latitude <= latMax && c.longitude >= lngMin && c.longitude <= lngMax;
-        })
-      : withCoords;
-    return inViewport.slice(0, MAX_VISIBLE_POINTS);
-  }, [activeRegion, data, pendingRegion, userLoc]);
 
-  const clusteredPoints = useMemo<ClusterPoint[]>(() => {
-    if (!markerItems.length) return [];
-    const region = activeRegion ?? pendingRegion;
-    if (!region) {
-      return markerItems
-        .map((item) => itemCoordinate(item))
-        .filter((x): x is { latitude: number; longitude: number } => Boolean(x))
-        .map((coord, idx) => ({
-          id: `single:${markerItems[idx]!.festivalId}`,
-          latitude: coord.latitude,
-          longitude: coord.longitude,
-          items: [markerItems[idx]!],
-        }));
-    }
-    const cellLat = Math.max(0.015, region.latitudeDelta / 11);
-    const cellLng = Math.max(0.015, region.longitudeDelta / 11);
-    const clusters = new Map<string, ClusterPoint>();
-    for (const item of markerItems) {
-      const c = itemCoordinate(item);
-      if (!c) continue;
-      const y = Math.floor(c.latitude / cellLat);
-      const x = Math.floor(c.longitude / cellLng);
-      const key = `${x}:${y}`;
-      const existing = clusters.get(key);
-      if (!existing) {
-        clusters.set(key, { id: key, latitude: c.latitude, longitude: c.longitude, items: [item] });
-      } else {
-        existing.items.push(item);
-        const n = existing.items.length;
-        existing.latitude = (existing.latitude * (n - 1) + c.latitude) / n;
-        existing.longitude = (existing.longitude * (n - 1) + c.longitude) / n;
+    let validCoordCount = 0;
+    let bgValidCount = 0;
+    const bgItems: FestivalListItem[] = [];
+    const validItems: FestivalListItem[] = [];
+    for (const item of list) {
+      if (itemCoordinateLoose(item)) {
+        validCoordCount++;
+        validItems.push(item);
+      }
+      if (itemCoordinateBg(item)) {
+        bgValidCount++;
+        bgItems.push(item);
       }
     }
-    return [...clusters.values()];
-  }, [activeRegion, markerItems, pendingRegion]);
+
+    const bgSorted = sortByUserDistance(bgItems, itemCoordinateBg, userLoc);
+    const validSorted = sortByUserDistance(validItems, itemCoordinateLoose, userLoc);
+    const vpBg = filterViewport(bgSorted, itemCoordinateBg, region);
+    const viewportBgCount = vpBg.length;
+
+    let tier: MapTier = 'A';
+    let clustered: ClusterPoint[] = [];
+    let tierAInputCount = 0;
+    let tierBInputCount = 0;
+    let tierCInputCount = 0;
+    let tierDInputCount = 0;
+
+    const aItems = vpBg.slice(0, MAX_VISIBLE_POINTS);
+    tierAInputCount = aItems.length;
+    clustered = buildGridClusters(aItems, region, itemCoordinateBg);
+
+    if (clustered.length > 0) {
+      tier = 'A';
+    } else {
+      const bItems = vpBg.slice(0, MAX_RAW_VIEWPORT);
+      tierBInputCount = bItems.length;
+      clustered = buildRawViewportClusters(bItems, itemCoordinateBg);
+      if (clustered.length > 0) {
+        tier = 'B';
+      } else {
+        const cItems = bgSorted.slice(0, MAX_VISIBLE_POINTS);
+        tierCInputCount = cItems.length;
+        clustered = buildGridClusters(cItems, region, itemCoordinateBg);
+        if (clustered.length > 0) {
+          tier = 'C';
+        } else {
+          const dItems = validSorted.slice(0, MAX_VISIBLE_POINTS);
+          tierDInputCount = dItems.length;
+          clustered = buildGridClusters(dItems, region, itemCoordinateLoose);
+          tier = 'D';
+        }
+      }
+    }
+
+    const finalRenderedMarkers = clustered.reduce((n, c) => n + c.items.length, 0);
+    const devDiagnostics: MapDevDiagnostics = {
+      fetched,
+      validCoordCount,
+      bgValidCount,
+      viewportBgCount,
+      tierAInputCount,
+      tierBInputCount,
+      tierCInputCount,
+      tierDInputCount,
+      clusteredMarkers: clustered.length,
+      finalRenderedMarkers,
+      fallbackActivation: tier === 'A' ? 'none' : tier,
+    };
+
+    return { clusteredPoints: clustered, devDiagnostics };
+  }, [activeRegion, data, pendingRegion, userLoc]);
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    const d = devDiagnostics;
+    const droppedNoFiniteCoord = d.fetched - d.validCoordCount;
+    const droppedOutsideBg = d.validCoordCount - d.bgValidCount;
+    const droppedViewport = d.bgValidCount - d.viewportBgCount;
+    console.log('[FestivalsMap][diag]', {
+      fetched: d.fetched,
+      validCoords: d.validCoordCount,
+      bulgariaValidCoords: d.bgValidCount,
+      viewportBgVisible: d.viewportBgCount,
+      clusteredMapMarkers: d.clusteredMarkers,
+      finalRenderedFestivalMarkers: d.finalRenderedMarkers,
+      fallbackActivationReason: d.fallbackActivation,
+      displayTier: d.fallbackActivation === 'none' ? 'A' : d.fallbackActivation,
+      stagesDropped: {
+        missingOrInvalidLatLng: droppedNoFiniteCoord,
+        outsideLooksLikeBulgaria: droppedOutsideBg,
+        outsideViewportAmongBg: droppedViewport,
+      },
+      tierInputs: {
+        A_cluster_viewport_cap90: d.tierAInputCount,
+        B_raw_viewport_cap200: d.tierBInputCount,
+        C_cluster_allBg_cap90: d.tierCInputCount,
+        D_cluster_allValid_cap90: d.tierDInputCount,
+      },
+      activeCategory,
+    });
+  }, [activeCategory, devDiagnostics]);
 
   const initialRegion = useMemo(() => {
     if (userLoc) {
@@ -193,10 +357,9 @@ export default function FestivalsMapScreen() {
   const onMarkerPress = useCallback((item: FestivalListItem) => {
     void Haptics.selectionAsync();
     setSelected(item);
-    const c = itemCoordinate(item);
+    const c = resolveMapCoordinate(item);
     const m = mapRef.current;
     if (m && c) {
-      // Nudge the active marker up a touch so the bottom preview card doesn't cover it.
       m.animateToRegion(
         {
           latitude: c.latitude - 0.02,
@@ -283,6 +446,9 @@ export default function FestivalsMapScreen() {
     );
   }
 
+  const showEmptyCoords = devDiagnostics.fetched > 0 && devDiagnostics.validCoordCount === 0;
+  const showNoMatchesCategory = devDiagnostics.fetched === 0;
+
   return (
     <View style={styles.root}>
       <MapView
@@ -297,7 +463,8 @@ export default function FestivalsMapScreen() {
         {clusteredPoints.map((cluster) => {
           const isSingle = cluster.items.length === 1;
           const item = cluster.items[0]!;
-          const isActive = selected?.festivalId === item.festivalId;
+          const isActive =
+            selected != null && cluster.items.some((it) => it.festivalId === selected.festivalId);
           return (
             <Marker
               key={cluster.id}
@@ -364,7 +531,14 @@ export default function FestivalsMapScreen() {
         </Reanimated.View>
       ) : null}
 
-      {markerItems.length === 0 ? (
+      {showNoMatchesCategory ? (
+        <Reanimated.View
+          entering={FadeIn.duration(220)}
+          style={[styles.emptyFloating, { top: insets.top + 10 }]}>
+          <Text style={styles.emptyTitle}>Няма фестивали за този филтър</Text>
+          <Text style={styles.emptySub}>Избери „Всички“ или друга категория.</Text>
+        </Reanimated.View>
+      ) : showEmptyCoords ? (
         <Reanimated.View
           entering={FadeIn.duration(220)}
           style={[styles.emptyFloating, { top: insets.top + 10 }]}>
