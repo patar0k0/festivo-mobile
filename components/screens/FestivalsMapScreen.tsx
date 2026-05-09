@@ -8,8 +8,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -31,14 +29,6 @@ const MAX_RAW_VIEWPORT = 200;
 const REGION_DEBOUNCE_MS = 420;
 /** After custom Marker children mount on Android Google Maps, allow one paint cycle then stop tracking (avoids empty snapshots). */
 const ANDROID_MARKER_TRACK_VIEW_MS = 480;
-const CATEGORY_FILTERS = [
-  { key: 'all', label: 'Всички' },
-  { key: 'music', label: 'Music' },
-  { key: 'food', label: 'Food' },
-  { key: 'culture', label: 'Culture' },
-] as const;
-
-type CategoryFilter = (typeof CATEGORY_FILTERS)[number]['key'];
 type ClusterPoint = {
   id: string;
   latitude: number;
@@ -186,7 +176,6 @@ export default function FestivalsMapScreen() {
   const [userLoc, setUserLoc] = useState<{ latitude: number; longitude: number } | null>(null);
   const [activeRegion, setActiveRegion] = useState<Region | null>(null);
   const [pendingRegion, setPendingRegion] = useState<Region | null>(null);
-  const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
   const [searchAreaDirty, setSearchAreaDirty] = useState(false);
   const mapRef = useRef<MapView | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,12 +184,11 @@ export default function FestivalsMapScreen() {
   );
 
   const { data, isPending, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['festivals', 'map', 'trending', activeCategory],
+    queryKey: ['festivals', 'map', 'trending'],
     queryFn: () =>
       getFestivals({
         sort: 'trending',
         limit: 220,
-        ...(activeCategory !== 'all' ? { category: activeCategory } : {}),
       }),
     staleTime: 60_000,
   });
@@ -380,9 +368,8 @@ export default function FestivalsMapScreen() {
         D_cluster_allValid_cap90: d.tierDInputCount,
       },
       markerLayoutMode: d.markerLayoutMode,
-      activeCategory,
     });
-  }, [activeCategory, devDiagnostics]);
+  }, [devDiagnostics]);
 
   const initialRegion = useMemo(() => {
     if (userLoc) {
@@ -395,6 +382,11 @@ export default function FestivalsMapScreen() {
     }
     return BULGARIA_REGION;
   }, [userLoc]);
+
+  const onMapReady = useCallback(() => {
+    setActiveRegion(initialRegion);
+    setPendingRegion(initialRegion);
+  }, [initialRegion]);
 
   const onRecenter = useCallback(() => {
     void Haptics.selectionAsync();
@@ -514,6 +506,7 @@ export default function FestivalsMapScreen() {
         style={StyleSheet.absoluteFill}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         initialRegion={initialRegion}
+        onMapReady={onMapReady}
         onRegionChangeComplete={onRegionChangeComplete}
         showsUserLocation={Boolean(userLoc)}
         showsMyLocationButton={false}
@@ -542,32 +535,12 @@ export default function FestivalsMapScreen() {
         })}
       </MapView>
 
-      <View style={[styles.categoryBar, { top: insets.top + 10 }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-          {CATEGORY_FILTERS.map((filter) => (
-            <Pressable
-              key={filter.key}
-              onPress={() => setActiveCategory(filter.key)}
-              style={({ pressed }) => [
-                styles.categoryChip,
-                activeCategory === filter.key && styles.categoryChipActive,
-                pressed && styles.categoryChipPressed,
-              ]}
-            >
-              <Text style={[styles.categoryChipText, activeCategory === filter.key && styles.categoryChipTextActive]}>
-                {filter.label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-
       {searchAreaDirty ? (
         <PressableScale
           onPress={onSearchThisArea}
           pressedScale={0.96}
           pressedOpacity={0.88}
-          style={[styles.searchAreaBtn, { top: insets.top + 62 }]}
+          style={[styles.searchAreaBtn, { top: insets.top + 10 }]}
         >
           <Text style={styles.searchAreaText}>Search this area</Text>
         </PressableScale>
@@ -694,37 +667,6 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.92)',
-  },
-  categoryBar: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-  },
-  categoryRow: {
-    gap: 8,
-  },
-  categoryChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: 'rgba(255,255,255,0.94)',
-  },
-  categoryChipActive: {
-    backgroundColor: '#111827',
-    borderColor: '#111827',
-  },
-  categoryChipPressed: {
-    opacity: 0.7,
-  },
-  categoryChipText: {
-    fontSize: 12,
-    color: '#111827',
-    fontWeight: '700',
-  },
-  categoryChipTextActive: {
-    color: '#FFFFFF',
   },
   searchAreaBtn: {
     position: 'absolute',
