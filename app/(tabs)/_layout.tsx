@@ -1,42 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
-import { PlatformPressable } from '@react-navigation/elements';
 import { Tabs } from 'expo-router';
-import { StyleSheet } from 'react-native';
 
-import { MAIN_TAB_BAR_HEIGHT } from '@/lib/navigation/mainTabBar';
+import { MainFestivoTabBar } from '@/components/navigation/MainFestivoTabBar';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
-
-function PlanTabBarButton(props: BottomTabBarButtonProps) {
-  return (
-    <PlatformPressable
-      {...props}
-      style={(state) => [
-        typeof props.style === 'function' ? props.style(state) : props.style,
-        styles.planTabButton,
-      ]}
-    />
-  );
-}
 
 export default function TabsGroupLayout() {
   useMobilePlanState();
   return (
     <Tabs
+      tabBar={(props) => <MainFestivoTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#111827',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: '#0F172A',
+        tabBarInactiveTintColor: '#94A3B8',
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          display: 'flex',
-          height: MAIN_TAB_BAR_HEIGHT,
-          paddingTop: 4,
-          paddingBottom: 4,
-          borderTopWidth: 1,
-          borderTopColor: '#EEEEEE',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
         },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '500' },
       }}>
       <Tabs.Screen
         name="index"
@@ -60,14 +42,8 @@ export default function TabsGroupLayout() {
         name="plan"
         options={{
           title: 'Моят план',
-          tabBarButton: PlanTabBarButton,
-          tabBarLabelStyle: { fontSize: 13, fontWeight: '700' },
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'bookmark' : 'bookmark-outline'}
-              size={focused ? 36 : 32}
-              color={color}
-            />
+            <Ionicons name={focused ? 'bookmark' : 'bookmark-outline'} size={24} color={color} />
           ),
         }}
       />
@@ -102,11 +78,3 @@ export default function TabsGroupLayout() {
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  planTabButton: {
-    marginTop: -10,
-    justifyContent: 'flex-end',
-    paddingBottom: 2,
-  },
-});
