@@ -28,6 +28,7 @@ import { getFestivalBySlug, getFestivals } from '@/lib/api/festivals';
 import { getPersonalizedSections, type PersonalizedSection } from '@/lib/api/recommendations';
 import { formatDateRangeRelative, getRelativeDateLabel } from '@/lib/festival/relativeDate';
 import { getRecentlyViewedFestivals, type RecentlyViewedFestival } from '@/lib/personalization/recentlyViewed';
+import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 import { queryClient } from '@/lib/queryClient';
 
@@ -41,7 +42,14 @@ type SectionVariant = 'continue' | 'week' | 'popular' | 'following';
 
 type HomeSection = {
   key: SectionKey;
-  source: 'recently_viewed' | PersonalizedSection['key'] | 'week' | 'popular';
+  source:
+    | 'recently_viewed'
+    | PersonalizedSection['key']
+    | 'week'
+    | 'popular'
+    | 'planner_weekend'
+    | 'planner_category'
+    | 'planner_city';
   variant: SectionVariant;
   title: string;
   data: FestivalListItem[];
@@ -71,6 +79,14 @@ function pickSectionTitle(section: HomeSection): string {
       return 'Може да ти хареса';
     case 'trending':
       return 'Набира скорост';
+    case 'planner_weekend':
+      return 'Продължи планирането за уикенда';
+    case 'planner_category':
+      return firstItem?.category === 'folk' || firstItem?.category === 'folklore'
+        ? 'Защото планираш фолклорни събития'
+        : 'Подобни на планираните от теб';
+    case 'planner_city':
+      return city ? `Често избираш събития в ${city}` : 'По твоите места';
     case 'week':
       return 'Тази седмица';
     case 'popular':
@@ -90,6 +106,31 @@ function formatViewedAgo(viewedAt?: string): string {
   if (diffHours < 24) return `Преди ${diffHours} ч`;
   const diffDays = Math.round(diffHours / 24);
   return `Преди ${diffDays} д`;
+}
+
+function resolveWeekendHint(dateIso: string): boolean {
+  const date = new Date(dateIso);
+  if (Number.isNaN(date.getTime())) return false;
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+
+function mostCommon(values: string[]): string | null {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    const key = value.trim();
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [key, count] of counts) {
+    if (count > bestCount) {
+      best = key;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 function TrendingItemSeparator() {
@@ -514,6 +555,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const toggleSavedMutation = useToggleSavedMutation();
+  const planQuery = useMobilePlanState();
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
   const CARD_WIDTH = Math.min(360, Math.round(windowWidth * 0.88));
@@ -561,6 +603,72 @@ export default function HomeScreen() {
     () => personalizedQuery.data ?? [],
     [personalizedQuery.data],
   );
+  const recommendationPool = useMemo(() => {
+    const seen = new Set<string>();
+    const out: FestivalListItem[] = [];
+    const push = (items: FestivalListItem[]) => {
+      for (const item of items) {
+        if (seen.has(item.festivalId)) continue;
+        seen.add(item.festivalId);
+        out.push(item);
+      }
+    };
+    push(personalizedSections.flatMap((section) => section.items));
+    push(week);
+    push(popular);
+    push(trending);
+    return out;
+  }, [personalizedSections, popular, trending, week]);
+
+  const plannerAwareSections = useMemo<HomeSection[]>(() => {
+    const plannedIds = new Set(planQuery.savedFestivalIds);
+    if (!plannedIds.size) return [];
+    const plannedVisible = recommendationPool.filter((item) => plannedIds.has(item.festivalId));
+    const candidates = recommendationPool.filter((item) => !plannedIds.has(item.festivalId));
+    const sectionsOut: HomeSection[] = [];
+
+    const plannedWeekend = plannedVisible.filter((item) => resolveWeekendHint(item.start_date));
+    const weekendCandidates = candidates.filter((item) => resolveWeekendHint(item.start_date)).slice(0, 4);
+    if (plannedWeekend.length > 0 && weekendCandidates.length > 0) {
+      sectionsOut.push({
+        key: 'week',
+        source: 'planner_weekend',
+        variant: 'week',
+        title: 'Продължи планирането за уикенда',
+        data: weekendCandidates,
+      });
+    }
+
+    const category = mostCommon(plannedVisible.map((item) => item.category).filter(Boolean) as string[]);
+    if (category) {
+      const categoryCandidates = candidates.filter((item) => item.category === category).slice(0, 4);
+      if (categoryCandidates.length > 0) {
+        sectionsOut.push({
+          key: 'week',
+          source: 'planner_category',
+          variant: 'week',
+          title: 'Подобни на планираните от теб',
+          data: categoryCandidates,
+        });
+      }
+    }
+
+    const city = mostCommon(plannedVisible.map((item) => item.city).filter(Boolean));
+    if (city) {
+      const cityCandidates = candidates.filter((item) => item.city === city).slice(0, 4);
+      if (cityCandidates.length > 0) {
+        sectionsOut.push({
+          key: 'popular',
+          source: 'planner_city',
+          variant: 'popular',
+          title: `Често избираш събития в ${city}`,
+          data: cityCandidates,
+        });
+      }
+    }
+
+    return sectionsOut.slice(0, 2);
+  }, [planQuery.savedFestivalIds, recommendationPool]);
 
   const trendingIds = new Set(trending.map((i) => i.festivalId));
 
@@ -630,6 +738,10 @@ export default function HomeScreen() {
       });
     }
 
+    for (const section of plannerAwareSections) {
+      grouped[section.key === 'popular' ? 'popular' : 'week'].push(section);
+    }
+
     if (!weekQuery.isLoading && weekFiltered.length > 0) {
       grouped.week.push({
         key: 'week',
@@ -654,6 +766,7 @@ export default function HomeScreen() {
   }, [
     continueExploring,
     personalizedSections,
+    plannerAwareSections,
     popular,
     popularQuery.isLoading,
     sessionOrder,
@@ -799,6 +912,10 @@ export default function HomeScreen() {
     const badgeLabel =
       section.source === 'near_you'
         ? 'Наблизо'
+        : section.source === 'planner_weekend' ||
+            section.source === 'planner_category' ||
+            section.source === 'planner_city'
+          ? 'По плана'
         : section.source === 'from_followed_organizers'
           ? 'Следвани'
           : section.source === 'for_you'

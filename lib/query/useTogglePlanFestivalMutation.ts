@@ -4,6 +4,7 @@ import type { FollowFeedPage } from '@/lib/api/followFeed';
 import type { FestivalDetail, FestivalListItem } from '@/lib/api/festivals';
 import { removeFestivalFromPlan, saveFestivalToPlan, type MobilePlanStateDto } from '@/lib/api/mobilePlan';
 import type { OrganizerDetail } from '@/lib/api/organizers';
+import { enqueueFestivalPlanMutation, isLikelyOfflinePlannerError } from '@/lib/plan/offlineQueue';
 import {
   festivalRefMatches,
   flattenFestivalListQueryData,
@@ -27,6 +28,7 @@ type Snapshot = {
 type ToggleContext = {
   snapshots: Snapshot[];
   ref: FestivalSavedRef;
+  nextSaved: boolean;
 };
 
 function isTargetQuery(query: Query): boolean {
@@ -156,10 +158,14 @@ export function useTogglePlanFestivalMutation() {
         if (next !== data) queryClient.setQueryData(queryKey, next);
       }
 
-      return { snapshots, ref };
+      return { snapshots, ref, nextSaved };
     },
-    onError: (_error, _input, context) => {
+    onError: (error, _input, context) => {
       if (!context) return;
+      if (isLikelyOfflinePlannerError(error)) {
+        void enqueueFestivalPlanMutation(context.ref.festivalId, context.nextSaved);
+        return;
+      }
       for (const snapshot of context.snapshots) {
         queryClient.setQueryData(snapshot.queryKey, snapshot.data);
       }

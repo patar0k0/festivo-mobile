@@ -120,6 +120,21 @@ export async function removeFestivalFromPlan(
   });
 }
 
+export async function toggleScheduleItemInPlan(
+  scheduleItemId: string,
+): Promise<{ ok: boolean; inPlan: boolean; scheduleItemId: string }> {
+  const body = await requestMobilePlan<unknown>('/api/plan/items', {
+    method: 'POST',
+    body: { scheduleItemId },
+  });
+  const rec = asRecord(body);
+  return {
+    ok: Boolean(rec?.ok),
+    inPlan: Boolean(rec?.inPlan),
+    scheduleItemId,
+  };
+}
+
 export async function updateFestivalReminder(
   festivalId: string,
   type: MobilePlanReminderType,

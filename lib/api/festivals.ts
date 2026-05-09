@@ -37,6 +37,24 @@ export type FestivalListItem = {
   lng?: number;
 };
 
+export type FestivalScheduleDay = {
+  id: string;
+  festival_id?: string;
+  date: string;
+  title?: string | null;
+};
+
+export type FestivalScheduleItem = {
+  id: string;
+  day_id?: string | null;
+  title: string;
+  description?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  stage?: string | null;
+  sort_order?: number | null;
+};
+
 export type FestivalDetail = {
   festivalId: string;
   slug: string;
@@ -71,6 +89,8 @@ export type FestivalDetail = {
     location_name?: string | null;
     place_id?: string | null;
   };
+  schedule_days?: FestivalScheduleDay[];
+  schedule_items?: FestivalScheduleItem[];
 };
 
 function optionalTrimmedString(value: unknown): string | undefined {
@@ -86,11 +106,87 @@ function parseOptionalCoord(value: unknown): number | undefined {
   return undefined;
 }
 
+function optionalNullableString(value: unknown): string | null | undefined {
+  if (value == null) return null;
+  const text = String(value).trim();
+  return text ? text : null;
+}
+
+function parseOptionalNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, unknown>;
   }
   return null;
+}
+
+function parseScheduleDay(raw: unknown): FestivalScheduleDay | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const id = String(rec.id ?? rec.day_id ?? '').trim();
+  const date = String(rec.date ?? rec.day_date ?? '').trim();
+  if (!id || !date) return null;
+  return {
+    id,
+    festival_id: optionalTrimmedString(rec.festival_id ?? rec.festivalId),
+    date,
+    title: optionalNullableString(rec.title),
+  };
+}
+
+function parseScheduleItem(raw: unknown): FestivalScheduleItem | null {
+  const rec = asRecord(raw);
+  if (!rec) return null;
+  const id = String(rec.id ?? rec.schedule_item_id ?? rec.scheduleItemId ?? '').trim();
+  const title = String(rec.title ?? '').trim();
+  if (!id || !title) return null;
+  return {
+    id,
+    day_id: optionalNullableString(rec.day_id ?? rec.dayId),
+    title,
+    description: optionalNullableString(rec.description),
+    start_time: optionalNullableString(rec.start_time ?? rec.startTime),
+    end_time: optionalNullableString(rec.end_time ?? rec.endTime),
+    stage: optionalNullableString(rec.stage),
+    sort_order: parseOptionalNumber(rec.sort_order ?? rec.sortOrder),
+  };
+}
+
+function parseScheduleArrays(o: Record<string, unknown>): {
+  schedule_days?: FestivalScheduleDay[];
+  schedule_items?: FestivalScheduleItem[];
+} {
+  const schedule = asRecord(o.schedule ?? o.program);
+  const daysRaw = Array.isArray(o.days)
+    ? o.days
+    : Array.isArray(o.schedule_days)
+      ? o.schedule_days
+      : Array.isArray(o.scheduleDays)
+        ? o.scheduleDays
+        : Array.isArray(schedule?.days)
+          ? schedule.days
+          : [];
+  const itemsRaw = Array.isArray(o.scheduleItems)
+    ? o.scheduleItems
+    : Array.isArray(o.schedule_items)
+      ? o.schedule_items
+      : Array.isArray(schedule?.items)
+        ? schedule.items
+        : [];
+  const days = daysRaw.map(parseScheduleDay).filter((x): x is FestivalScheduleDay => x != null);
+  const items = itemsRaw.map(parseScheduleItem).filter((x): x is FestivalScheduleItem => x != null);
+  return {
+    schedule_days: days.length ? days : undefined,
+    schedule_items: items.length ? items : undefined,
+  };
 }
 
 function parseListItem(raw: unknown): FestivalListItem | null {
@@ -281,6 +377,7 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
 
   const is_verified_detail = Boolean(o.is_verified ?? o.verified ?? o.isVerified);
   const is_promoted_detail = Boolean(o.is_promoted ?? o.isPromoted);
+  const schedule = parseScheduleArrays(o);
 
   return {
     festivalId,
@@ -311,6 +408,8 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
     is_verified: is_verified_detail || undefined,
     is_promoted: is_promoted_detail || undefined,
     location,
+    schedule_days: schedule.schedule_days,
+    schedule_items: schedule.schedule_items,
   };
 }
 

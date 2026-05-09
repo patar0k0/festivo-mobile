@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { AppState } from 'react-native';
 
 import { getMobilePlanState, type MobilePlanReminderDto, type MobilePlanStateDto } from '@/lib/api/mobilePlan';
+import { hydrateQueuedPlannerMutations, replayQueuedPlannerMutations } from '@/lib/plan/offlineQueue';
 import { updateFestivalSavedStateInCache } from '@/lib/query/festivalSavedCache';
 import type { FollowFeedPage } from '@/lib/api/followFeed';
 import type { FestivalDetail, FestivalListItem } from '@/lib/api/festivals';
@@ -61,6 +62,11 @@ export function useMobilePlanState() {
 
   const savedFestivalIds = useMemo(() => query.data?.savedFestivalIds ?? [], [query.data?.savedFestivalIds]);
   const savedFestivalIdSet = useMemo(() => new Set(savedFestivalIds), [savedFestivalIds]);
+  const savedScheduleItemIds = useMemo(
+    () => query.data?.savedScheduleItemIds ?? [],
+    [query.data?.savedScheduleItemIds],
+  );
+  const savedScheduleItemIdSet = useMemo(() => new Set(savedScheduleItemIds), [savedScheduleItemIds]);
   const reminders = useMemo<Record<string, MobilePlanReminderDto>>(
     () => query.data?.reminders ?? {},
     [query.data?.reminders],
@@ -76,6 +82,15 @@ export function useMobilePlanState() {
   );
 
   const isSaved = useCallback((festivalId: string) => savedFestivalIdSet.has(festivalId), [savedFestivalIdSet]);
+  const isScheduleItemPlanned = useCallback(
+    (scheduleItemId: string) => savedScheduleItemIdSet.has(scheduleItemId),
+    [savedScheduleItemIdSet],
+  );
+
+  useEffect(() => {
+    void hydrateQueuedPlannerMutations(queryClient);
+    void replayQueuedPlannerMutations(queryClient);
+  }, [queryClient]);
 
   useEffect(() => {
     if (!query.data) return;
@@ -110,6 +125,7 @@ export function useMobilePlanState() {
       const staleFor = Date.now() - updatedAt;
       if (staleFor < 20_000) return;
       if (state?.fetchStatus === 'fetching') return;
+      void replayQueuedPlannerMutations(queryClient);
       queryClient.invalidateQueries({ queryKey: ['mobilePlanState'] });
     });
     return () => sub.remove();
@@ -118,9 +134,11 @@ export function useMobilePlanState() {
   return {
     ...query,
     savedFestivalIds,
+    savedScheduleItemIds,
     reminders,
     stats,
     isSaved,
+    isScheduleItemPlanned,
   };
 }
 
