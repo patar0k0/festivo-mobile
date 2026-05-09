@@ -90,7 +90,7 @@ export function FestivalCard({
   variant = 'default',
   saveDisabled,
 }: FestivalCardProps) {
-  const saveLabel = item.saved ? 'Премахни' : 'Запази';
+  const saveLabel = item.saved ? 'Премахни' : 'В план';
   const startsInText = getStartsInLabelBg(item.start_date);
   const dateLabel = getRelativeDateLabel(item.start_date);
   const lastSaveTapRef = useRef(0);
@@ -152,7 +152,7 @@ export function FestivalCard({
         {item.saved ? (
           <View style={styles.savedCompactStack}>
             <View style={styles.savedBadgeRowCompact}>
-              <Text style={styles.savedBadgeLabelCompact}>Запазено</Text>
+              <Text style={styles.savedBadgeLabelCompact}>В плана</Text>
             </View>
             <FestivalSaveButton
               label={saveLabel}
@@ -217,7 +217,7 @@ export function FestivalCard({
             <View style={styles.heroSavedStack}>
               <View style={styles.savedBadgeRowLight}>
                 <AnimatedBookmark filled size={18} color="#FFFFFF" />
-                <Text style={styles.savedBadgeLabelLight}>Запазено</Text>
+                <Text style={styles.savedBadgeLabelLight}>В плана</Text>
               </View>
               <FestivalSaveButton
                 label={saveLabel}
@@ -274,7 +274,7 @@ export function FestivalCard({
         <View style={styles.savedPlainStack}>
           <View style={styles.savedBadgeRowDark}>
             <AnimatedBookmark filled size={18} color="#FFFFFF" />
-            <Text style={styles.savedBadgeLabelOnGradient}>Запазено</Text>
+            <Text style={styles.savedBadgeLabelOnGradient}>В плана</Text>
           </View>
           <FestivalSaveButton label={saveLabel} onPress={handleSavePress} disabled={saveDisabled} loading={saveDisabled} />
           <Text style={styles.reminderHintLight}>Ще получиш напомняне</Text>
@@ -292,7 +292,7 @@ export function FeaturedFestivalCard({
   onPressSave,
   saveDisabled,
 }: Omit<FestivalCardProps, 'variant'>) {
-  const saveLabel = item.saved ? 'Премахни' : 'Запази';
+  const saveLabel = item.saved ? 'Премахни' : 'В план';
   const startsInText = getStartsInLabelBg(item.start_date);
   const dateLabel = getRelativeDateLabel(item.start_date);
   const lastSaveTapRef = useRef(0);
@@ -356,7 +356,7 @@ export function FeaturedFestivalCard({
           <View style={styles.featuredSavedStack}>
             <View style={styles.savedBadgeRowLight}>
               <AnimatedBookmark filled size={18} color="#FFFFFF" />
-              <Text style={styles.savedBadgeLabelLight}>Запазено</Text>
+              <Text style={styles.savedBadgeLabelLight}>В плана</Text>
             </View>
             <FestivalSaveButton
               label={saveLabel}

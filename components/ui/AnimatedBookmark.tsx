@@ -65,7 +65,7 @@ export function AnimatedBookmark({
     <Animated.View style={[styles.wrap, animatedStyle, style]}>
       <View pointerEvents="none">
         <Ionicons
-          name={filled ? 'bookmark' : 'bookmark-outline'}
+          name={filled ? 'heart' : 'heart-outline'}
           size={size}
           color={color}
         />

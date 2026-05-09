@@ -72,7 +72,7 @@ export function SearchResultCard({
         ]}
         hitSlop={10}
         accessibilityRole="button"
-        accessibilityLabel={item.saved ? 'Премахни от запазени' : 'Запази'}>
+        accessibilityLabel={item.saved ? 'Премахни от плана' : 'В план'}>
         {isSaving ? (
           <ActivityIndicator size="small" color={bookmarkColor} />
         ) : (
