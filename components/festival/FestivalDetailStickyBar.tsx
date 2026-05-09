@@ -29,8 +29,8 @@ export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
     <View style={styles.wrap} pointerEvents="box-none">
       <View style={styles.inner}>
         <ActionIcon
-          label={saved ? 'Запазено' : 'Запази'}
-          icon={saved ? 'bookmark' : 'bookmark-outline'}
+          label={saved ? 'В плана' : 'В план'}
+          icon={saved ? 'heart' : 'heart-outline'}
           bookmarkFilled={saved}
           onPress={onSave}
           disabled={saveBusy}

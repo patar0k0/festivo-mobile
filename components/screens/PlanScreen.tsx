@@ -307,6 +307,7 @@ export default function PlanScreen() {
   const [pastExpanded, setPastExpanded] = useState(false);
   const [pickerFestivalId, setPickerFestivalId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<PlanViewMode>('festivals');
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const festivalsQuery = useQuery({
     queryKey: ['festivals', 'plan-catalog'],
     queryFn: () => getFestivals({ sort: 'trending', limit: 240 }),
@@ -420,7 +421,7 @@ export default function PlanScreen() {
         contentContainerStyle={[styles.center, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 }]}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}>
         <Text style={styles.emptyTitle}>Моят план е празен</Text>
-        <Text style={styles.emptySub}>Запази фестивали от Начало, за да ги виждаш тук.</Text>
+        <Text style={styles.emptySub}>Добави фестивали в плана от Начало, за да ги виждаш тук.</Text>
       </ScrollView>
     );
   }
@@ -438,7 +439,7 @@ export default function PlanScreen() {
       ]}>
       <View style={styles.statsCard}>
         <Text style={styles.statsTitle}>Моят план</Text>
-        <AnimatedCount style={styles.statsLine} value={`Запазени: ${planQuery.stats.savedFestivalCount}`} />
+        <AnimatedCount style={styles.statsLine} value={`В плана: ${planQuery.stats.savedFestivalCount}`} />
         <AnimatedCount style={styles.statsLine} value={`Точки от програма: ${planQuery.stats.plannedItemCount}`} />
         <AnimatedCount style={styles.statsLine} value={`Предстоящи: ${planQuery.stats.upcomingCount}`} />
         <View style={styles.reminderPreviewBox}>
@@ -536,14 +537,21 @@ export default function PlanScreen() {
             {grouped[key].map((item) => {
               const reminder = planQuery.reminders[item.festivalId]?.type ?? 'default';
               const plannedItemCount = itemCountsByFestival[item.festivalId] ?? 0;
-              const removing = togglePlanMutation.isPending;
+              const removing = removingIds.has(item.festivalId);
+              const onRemove = () => {
+                setRemovingIds((prev) => new Set(prev).add(item.festivalId));
+                togglePlanMutation.mutate(
+                  { festivalId: item.festivalId, slug: item.slug, festival: item },
+                  { onSettled: () => setRemovingIds((prev) => { const next = new Set(prev); next.delete(item.festivalId); return next; }) },
+                );
+              };
               return (
                 <View key={item.festivalId} style={styles.cardWrap}>
                   <FestivalCard
                     variant="compact"
                     item={item}
                     onPressCard={() => router.push(festivalDetailHref(item.slug))}
-                    onPressSave={() => togglePlanMutation.mutate({ festivalId: item.festivalId, slug: item.slug, festival: item })}
+                    onPressSave={onRemove}
                     saveDisabled={removing}
                   />
                   {plannedItemCount > 0 ? (
@@ -587,9 +595,10 @@ export default function PlanScreen() {
                       </Pressable>
                     ) : null}
                     <Pressable
-                      onPress={() => togglePlanMutation.mutate({ festivalId: item.festivalId, slug: item.slug, festival: item })}
-                      style={styles.removeChip}>
-                      <Text style={styles.removeChipText}>Премахни</Text>
+                      onPress={onRemove}
+                      disabled={removing}
+                      style={[styles.removeChip, removing && styles.removeChipDisabled]}>
+                      <Text style={styles.removeChipText}>{removing ? 'Премахва...' : 'Премахни'}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -913,7 +922,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: festivalUi.colors.secondary,
   },
-  inlineActions: { marginTop: 8, flexDirection: 'row', gap: 8 },
+  inlineActions: { marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   reminderChip: {
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -955,6 +964,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
   },
   removeChipText: { fontSize: 12, fontWeight: '700', color: '#B91C1C' },
+  removeChipDisabled: { opacity: 0.5 },
   pastToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   pastToggleText: { fontSize: 13, fontWeight: '700', color: '#4F46E5' },
 });
