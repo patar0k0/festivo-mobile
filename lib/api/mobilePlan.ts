@@ -128,6 +128,9 @@ async function requestMobilePlan<T>(path: string, options?: MobilePlanRequestOpt
   });
   const body = await readJson(res);
   if (!res.ok) {
+    if (__DEV__) {
+      console.warn(`[API] ${path} error body:`, JSON.stringify(body));
+    }
     throw new Error(readErrorMessage(body, res.status));
   }
   return body as T;
