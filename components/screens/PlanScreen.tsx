@@ -86,13 +86,18 @@ function parseDay(dateIso: string): number | null {
   return Math.floor(t / 86_400_000);
 }
 
-function resolveGroup(startDate: string): PlanGroupKey {
-  const day = parseDay(startDate);
-  if (day == null) return 'later';
+function resolveGroup(startDate: string, endDate?: string | null): PlanGroupKey {
+  const startDay = parseDay(startDate);
+  const endDay = endDate ? parseDay(endDate) : null;
   const now = new Date();
   const today = Math.floor(now.getTime() / 86_400_000);
-  const delta = day - today;
-  if (delta < 0) return 'past';
+  // A festival is past only when its last day is before today.
+  const lastDay = endDay ?? startDay;
+  if (lastDay == null || lastDay < today) return 'past';
+  if (startDay == null) return 'later';
+  // Ongoing festival (started in the past but hasn't ended yet).
+  if (startDay < today) return 'this_week';
+  const delta = startDay - today;
   const weekday = now.getDay();
   const toSaturday = (6 - weekday + 7) % 7;
   const toSunday = (7 - weekday) % 7;
@@ -117,7 +122,11 @@ function formatCalendarDateLabel(dateIso: string): string {
 function buildNextReminderPreview(festivals: FestivalListItem[], reminders: Record<string, { type: MobilePlanReminderType }>): string {
   const next = festivals
     .filter((festival) => (reminders[festival.festivalId]?.type ?? 'default') !== 'none')
-    .sort((a, b) => Date.parse(a.start_date) - Date.parse(b.start_date))[0];
+    .sort((a, b) => {
+      const ta = Date.parse(a.start_date) || Infinity;
+      const tb = Date.parse(b.start_date) || Infinity;
+      return ta - tb;
+    })[0];
   if (!next) return 'Няма активно напомняне за предстоящ фестивал.';
   const type = reminders[next.festivalId]?.type ?? 'default';
   return `${next.title}: ${REMINDER_EXPLANATIONS[type]}.`;
@@ -389,7 +398,7 @@ export default function PlanScreen() {
       past: [],
     };
     for (const festival of plannedFestivals) {
-      groups[resolveGroup(festival.start_date)].push({ ...festival, saved: true });
+      groups[resolveGroup(festival.start_date, festival.end_date)].push({ ...festival, saved: true });
     }
     return groups;
   }, [plannedFestivals]);

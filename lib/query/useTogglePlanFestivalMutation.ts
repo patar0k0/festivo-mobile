@@ -90,11 +90,17 @@ function patchMobilePlanState(data: unknown, festivalId: string, nextSaved: bool
   const savedFestivalIds = nextSaved
     ? [festivalId, ...plan.savedFestivalIds.filter((id) => id !== festivalId)]
     : plan.savedFestivalIds.filter((id) => id !== festivalId);
+  // When removing, also drop the full object from savedFestivals so the plan screen
+  // immediately reflects the change without waiting for the refetch.
+  const savedFestivals = nextSaved
+    ? plan.savedFestivals
+    : (plan.savedFestivals ?? []).filter((f) => f.festivalId !== festivalId);
   const reminders = { ...plan.reminders };
   if (!nextSaved) delete reminders[festivalId];
   return {
     ...plan,
     savedFestivalIds,
+    savedFestivals,
     reminders,
     stats: {
       ...plan.stats,
