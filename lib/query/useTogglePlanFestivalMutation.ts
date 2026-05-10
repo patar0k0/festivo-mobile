@@ -233,6 +233,9 @@ export function useTogglePlanFestivalMutation() {
       return { snapshots, ref, nextSaved, intentSeq };
     },
     onError: (error, _input, context) => {
+      if (__DEV__) {
+        console.error('[planToggle] ГРЕШКА:', error instanceof Error ? error.message : String(error), '| festivalId:', _input?.festivalId);
+      }
       if (!context) return;
       if (!isLatestPlannerMutationIntent('festival', context.ref.festivalId, context.intentSeq)) {
         return;
