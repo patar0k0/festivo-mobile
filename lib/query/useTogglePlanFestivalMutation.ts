@@ -2,7 +2,7 @@ import { type Query, type QueryKey, useMutation, useQueryClient } from '@tanstac
 
 import type { FollowFeedPage } from '@/lib/api/followFeed';
 import type { FestivalDetail, FestivalListItem } from '@/lib/api/festivals';
-import { removeFestivalFromPlan, saveFestivalToPlan, type MobilePlanStateDto } from '@/lib/api/mobilePlan';
+import { removeFestivalFromPlan, saveFestivalToPlan, type MobilePlanStateDto, type SavedFestivalBasicDto } from '@/lib/api/mobilePlan';
 import type { OrganizerDetail } from '@/lib/api/organizers';
 import { debugLogRare, debugLogWarn } from '@/lib/debug/mobileDiagnosticsHelpers';
 import {
@@ -82,7 +82,31 @@ function patchOrganizerSaved(data: unknown, ref: FestivalSavedRef, nextSaved: bo
   return changed ? { ...rec, festivals } : data;
 }
 
-function patchMobilePlanState(data: unknown, festivalId: string, nextSaved: boolean): unknown {
+function toSavedFestivalBasicDto(
+  festivalId: string,
+  festival: FestivalListItem | FestivalDetail | undefined,
+): SavedFestivalBasicDto | null {
+  if (!festival?.slug || !festival?.title) return null;
+  return {
+    festivalId,
+    slug: festival.slug,
+    title: festival.title,
+    city: festival.city ?? null,
+    start_date: festival.start_date ?? null,
+    end_date: festival.end_date ?? null,
+    image_url: festival.image_url ?? null,
+    category: festival.category ?? null,
+    is_verified: Boolean(festival.is_verified),
+    organizer_name: festival.organizer_name ?? null,
+  };
+}
+
+function patchMobilePlanState(
+  data: unknown,
+  festivalId: string,
+  nextSaved: boolean,
+  festivalData?: SavedFestivalBasicDto | null,
+): unknown {
   const plan = data as MobilePlanStateDto | null;
   if (!plan || !Array.isArray(plan.savedFestivalIds)) return data;
   const exists = plan.savedFestivalIds.includes(festivalId);
@@ -90,11 +114,17 @@ function patchMobilePlanState(data: unknown, festivalId: string, nextSaved: bool
   const savedFestivalIds = nextSaved
     ? [festivalId, ...plan.savedFestivalIds.filter((id) => id !== festivalId)]
     : plan.savedFestivalIds.filter((id) => id !== festivalId);
-  // When removing, also drop the full object from savedFestivals so the plan screen
-  // immediately reflects the change without waiting for the refetch.
-  const savedFestivals = nextSaved
-    ? plan.savedFestivals
-    : (plan.savedFestivals ?? []).filter((f) => f.festivalId !== festivalId);
+  let savedFestivals: SavedFestivalBasicDto[];
+  if (nextSaved) {
+    // Optimistically prepend the new festival object so the plan screen shows it immediately.
+    const alreadyPresent = (plan.savedFestivals ?? []).some((f) => f.festivalId === festivalId);
+    savedFestivals =
+      festivalData && !alreadyPresent
+        ? [festivalData, ...(plan.savedFestivals ?? [])]
+        : (plan.savedFestivals ?? []);
+  } else {
+    savedFestivals = (plan.savedFestivals ?? []).filter((f) => f.festivalId !== festivalId);
+  }
   const reminders = { ...plan.reminders };
   if (!nextSaved) delete reminders[festivalId];
   return {
@@ -109,7 +139,13 @@ function patchMobilePlanState(data: unknown, festivalId: string, nextSaved: bool
   };
 }
 
-function patchAllQueries(queryKey: QueryKey, data: unknown, ref: FestivalSavedRef, nextSaved: boolean): unknown {
+function patchAllQueries(
+  queryKey: QueryKey,
+  data: unknown,
+  ref: FestivalSavedRef,
+  nextSaved: boolean,
+  festivalData?: SavedFestivalBasicDto | null,
+): unknown {
   if (!Array.isArray(queryKey) || queryKey.length === 0) return data;
   const root = String(queryKey[0] ?? '');
   if (root === 'festivals' || root === 'search') {
@@ -125,7 +161,7 @@ function patchAllQueries(queryKey: QueryKey, data: unknown, ref: FestivalSavedRe
     return patchOrganizerSaved(data, ref, nextSaved);
   }
   if (root === 'mobilePlanState') {
-    return patchMobilePlanState(data, ref.festivalId, nextSaved);
+    return patchMobilePlanState(data, ref.festivalId, nextSaved, festivalData);
   }
   return data;
 }
@@ -165,10 +201,15 @@ export function useTogglePlanFestivalMutation() {
         inSavedFestivalsList: fromPlan,
       });
       const nextSaved = !currentSaved;
+      // Build SavedFestivalBasicDto from the input so we can optimistically show the festival
+      // on the plan screen immediately without waiting for the server refetch.
+      const festivalData = nextSaved
+        ? toSavedFestivalBasicDto(ref.festivalId, input.festival ?? detail)
+        : null;
 
       let changedCount = 0;
       for (const { queryKey, data } of snapshots) {
-        const next = patchAllQueries(queryKey, data, ref, nextSaved);
+        const next = patchAllQueries(queryKey, data, ref, nextSaved, festivalData);
         if (next !== data) {
           changedCount += 1;
           queryClient.setQueryData(queryKey, next);
