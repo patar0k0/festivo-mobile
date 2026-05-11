@@ -20,7 +20,7 @@ export async function apiFetch(path: string, token?: string, init?: RequestInit)
   });
 
   if (__DEV__) {
-    console.log('[API]', path, res.status);
+    console.log('[API]', init?.method ?? 'GET', path, res.status);
   }
 
   return res;

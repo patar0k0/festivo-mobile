@@ -37,6 +37,11 @@ type ToggleContext = {
   intentSeq: number;
 };
 
+// onMutate runs before mutationFn and optimistically patches the cache,
+// so mutationFn cannot read the pre-toggle state from the cache. We stash
+// the desired next state here so mutationFn can pick the correct API call.
+const pendingNextSavedByFestivalId = new Map<string, boolean>();
+
 function isTargetQuery(query: Query): boolean {
   const key = query.queryKey;
   if (!Array.isArray(key) || key.length === 0) return false;
@@ -174,11 +179,16 @@ export function useTogglePlanFestivalMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: ToggleInput) => {
-      const currentPlan = queryClient.getQueryData<MobilePlanStateDto>(['mobilePlanState']);
-      const currentlySaved = Boolean(currentPlan?.savedFestivalIds.includes(input.festivalId));
-      return currentlySaved
-        ? removeFestivalFromPlan(input.festivalId)
-        : saveFestivalToPlan(input.festivalId);
+      const desiredNextSaved = pendingNextSavedByFestivalId.get(input.festivalId);
+      pendingNextSavedByFestivalId.delete(input.festivalId);
+      const shouldSave =
+        desiredNextSaved ??
+        !queryClient
+          .getQueryData<MobilePlanStateDto>(['mobilePlanState'])
+          ?.savedFestivalIds.includes(input.festivalId);
+      return shouldSave
+        ? saveFestivalToPlan(input.festivalId)
+        : removeFestivalFromPlan(input.festivalId);
     },
     onMutate: async (input): Promise<ToggleContext> => {
       const ref = buildRef(input);
@@ -201,6 +211,7 @@ export function useTogglePlanFestivalMutation() {
         inSavedFestivalsList: fromPlan,
       });
       const nextSaved = !currentSaved;
+      pendingNextSavedByFestivalId.set(ref.festivalId, nextSaved);
       // Build SavedFestivalBasicDto from the input so we can optimistically show the festival
       // on the plan screen immediately without waiting for the server refetch.
       const festivalData = nextSaved
