@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -36,7 +36,7 @@ function translateError(msg: string): string {
 }
 
 export default function LoginScreen() {
-  const { login, register, resetPassword } = useAuth();
+  const { login, register, resetPassword, signInWithGoogle } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -49,6 +49,7 @@ export default function LoginScreen() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const passwordRef = useRef<TextInput>(null);
@@ -64,6 +65,24 @@ export default function LoginScreen() {
     setShowConfirm(false);
     setFocusedField(null);
   };
+
+  async function handleGoogleSignIn() {
+    setError(null);
+    setSuccessMessage(null);
+    setGoogleLoading(true);
+    try {
+      const result = await signInWithGoogle();
+      if (result.outcome === 'success') {
+        void registerPush();
+        router.replace('/(tabs)');
+      } else if (result.outcome === 'error') {
+        setError(translateError(result.error.message));
+      }
+      // 'cancelled' — потребителят е затворил прозореца, без грешка
+    } finally {
+      setGoogleLoading(false);
+    }
+  }
 
   async function handleSubmit() {
     setError(null);
@@ -345,6 +364,38 @@ export default function LoginScreen() {
               <Text style={styles.forgotLinkText}>Забравена парола?</Text>
             </Pressable>
           ) : null}
+
+          {/* Divider */}
+          {!isForgot ? (
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>или</Text>
+              <View style={styles.dividerLine} />
+            </View>
+          ) : null}
+
+          {/* Google Sign In */}
+          {!isForgot ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.googleButton,
+                (googleLoading || submitting) && styles.googleButtonDisabled,
+                pressed && !googleLoading && !submitting && styles.googleButtonPressed,
+              ]}
+              onPress={() => void handleGoogleSignIn()}
+              disabled={googleLoading || submitting}
+              accessibilityRole="button"
+              accessibilityLabel="Влез с Google">
+              {googleLoading ? (
+                <ActivityIndicator color="#374151" size="small" />
+              ) : (
+                <>
+                  <AntDesign name="google" size={20} color="#EA4335" />
+                  <Text style={styles.googleButtonText}>Продължи с Google</Text>
+                </>
+              )}
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Footer */}
@@ -574,6 +625,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748B',
     fontWeight: '600',
+  },
+
+  // ─── Divider ─────────────────────────────────────────────────────────
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  dividerText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+
+  // ─── Google button ───────────────────────────────────────────────────
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingVertical: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  googleButtonDisabled: {
+    opacity: 0.55,
+  },
+  googleButtonPressed: {
+    backgroundColor: '#F8FAFC',
+  },
+  googleButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
   },
 
   // ─── Footer ──────────────────────────────────────────────────────────
