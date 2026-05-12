@@ -55,6 +55,8 @@ export default function LoginScreen() {
   const passwordRef = useRef<TextInput>(null);
   const confirmRef = useRef<TextInput>(null);
 
+  const isLoading = submitting || googleLoading;
+
   const switchMode = (next: Mode) => {
     setMode(next);
     setError(null);
@@ -78,7 +80,6 @@ export default function LoginScreen() {
       } else if (result.outcome === 'error') {
         setError(translateError(result.error.message));
       }
-      // 'cancelled' — потребителят е затворил прозореца, без грешка
     } finally {
       setGoogleLoading(false);
     }
@@ -97,10 +98,7 @@ export default function LoginScreen() {
       setSubmitting(true);
       try {
         const { error: err } = await resetPassword(email.trim());
-        if (err) {
-          setError(translateError(err.message));
-          return;
-        }
+        if (err) { setError(translateError(err.message)); return; }
         setSuccessMessage('Изпратихме ти линк за нулиране на паролата. Провери имейла си.');
       } finally {
         setSubmitting(false);
@@ -108,27 +106,15 @@ export default function LoginScreen() {
       return;
     }
 
-    if (!password) {
-      setError('Въведи своята парола.');
-      return;
-    }
+    if (!password) { setError('Въведи своята парола.'); return; }
 
     if (mode === 'register') {
-      if (password.length < 6) {
-        setError('Паролата трябва да е поне 6 символа.');
-        return;
-      }
-      if (password !== confirmPassword) {
-        setError('Паролите не съвпадат.');
-        return;
-      }
+      if (password.length < 6) { setError('Паролата трябва да е поне 6 символа.'); return; }
+      if (password !== confirmPassword) { setError('Паролите не съвпадат.'); return; }
       setSubmitting(true);
       try {
         const { error: err } = await register(email.trim(), password);
-        if (err) {
-          setError(translateError(err.message));
-          return;
-        }
+        if (err) { setError(translateError(err.message)); return; }
         setSuccessMessage('Акаунтът е създаден! Провери email адреса си за потвърждение, след което влез.');
         switchMode('login');
       } finally {
@@ -140,10 +126,7 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       const { error: err } = await login(email.trim(), password);
-      if (err) {
-        setError(translateError(err.message));
-        return;
-      }
+      if (err) { setError(translateError(err.message)); return; }
       void registerPush();
       router.replace('/(tabs)');
     } finally {
@@ -167,12 +150,12 @@ export default function LoginScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 40 },
+          { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 40 },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
 
-        {/* Brand */}
+        {/* ── Brand ── */}
         <View style={styles.brand}>
           <Image
             source={require('@/assets/images/icon.png')}
@@ -183,62 +166,107 @@ export default function LoginScreen() {
           <Text style={styles.brandTagline}>Открий своя следващ фестивал</Text>
         </View>
 
-        {/* Card */}
-        <View style={styles.card}>
+        {/* ── Forgot password ── */}
+        {isForgot ? (
+          <View style={styles.section}>
+            <Pressable onPress={() => switchMode('login')} style={styles.backBtn} accessibilityRole="button">
+              <Ionicons name="arrow-back" size={16} color="#64748B" />
+              <Text style={styles.backBtnText}>Назад</Text>
+            </Pressable>
+            <Text style={styles.sectionTitle}>Забравена парола</Text>
+            <Text style={styles.sectionSubtitle}>
+              Въведи email адреса си и ще ти изпратим линк за нулиране на паролата.
+            </Text>
 
-          {/* Tab switcher */}
-          {!isForgot ? (
-            <View style={styles.tabBar}>
-              <Pressable
-                style={[styles.tab, isLogin && styles.tabActive]}
-                onPress={() => switchMode('login')}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isLogin }}>
-                <Text style={[styles.tabText, isLogin && styles.tabTextActive]}>Вход</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.tab, isRegister && styles.tabActive]}
-                onPress={() => switchMode('register')}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isRegister }}>
-                <Text style={[styles.tabText, isRegister && styles.tabTextActive]}>Регистрация</Text>
-              </Pressable>
+            {successMessage ? (
+              <Animated.View entering={FadeIn.duration(220)} style={styles.successBox}>
+                <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                <Text style={styles.successText}>{successMessage}</Text>
+              </Animated.View>
+            ) : null}
+            {error ? (
+              <Animated.View entering={FadeIn.duration(220)} style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={18} color="#DC2626" />
+                <Text style={styles.errorText}>{error}</Text>
+              </Animated.View>
+            ) : null}
+
+            <Text style={styles.label}>Email адрес</Text>
+            <TextInput
+              style={inputStyle('email')}
+              placeholder="name@example.com"
+              placeholderTextColor="#94A3B8"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              returnKeyType="done"
+              value={email}
+              onChangeText={setEmail}
+              editable={!isLoading}
+              onFocus={() => setFocusedField('email')}
+              onBlur={() => setFocusedField(null)}
+              onSubmitEditing={() => void handleSubmit()}
+            />
+
+            <Pressable
+              style={[styles.primaryBtn, submitting && styles.btnDisabled]}
+              onPress={() => void handleSubmit()}
+              disabled={submitting}
+              accessibilityRole="button">
+              {submitting
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.primaryBtnText}>Изпрати линк</Text>
+              }
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.section}>
+
+            {/* ── Google first ── */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.googleBtn,
+                isLoading && styles.btnDisabled,
+                pressed && !isLoading && styles.googleBtnPressed,
+              ]}
+              onPress={() => void handleGoogleSignIn()}
+              disabled={isLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Продължи с Google">
+              {googleLoading ? (
+                <ActivityIndicator color="#374151" size="small" />
+              ) : (
+                <>
+                  <AntDesign name="google" size={20} color="#EA4335" />
+                  <Text style={styles.googleBtnText}>Продължи с Google</Text>
+                </>
+              )}
+            </Pressable>
+
+            {/* ── Divider ── */}
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>или с имейл</Text>
+              <View style={styles.dividerLine} />
             </View>
-          ) : (
-            <View style={styles.forgotHeader}>
-              <Pressable
-                onPress={() => switchMode('login')}
-                style={styles.backBtn}
-                accessibilityRole="button">
-                <Ionicons name="arrow-back" size={18} color="#475569" />
-                <Text style={styles.backBtnText}>Назад</Text>
-              </Pressable>
-              <Text style={styles.forgotTitle}>Забравена парола</Text>
-              <Text style={styles.forgotSubtitle}>
-                Въведи email адреса си и ще ти изпратим линк за нулиране на паролата.
-              </Text>
-            </View>
-          )}
 
-          {/* Success */}
-          {successMessage ? (
-            <Animated.View entering={FadeIn.duration(220)} style={styles.successBox}>
-              <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
-              <Text style={styles.successText}>{successMessage}</Text>
-            </Animated.View>
-          ) : null}
+            {/* ── Status messages ── */}
+            {successMessage ? (
+              <Animated.View entering={FadeIn.duration(220)} style={styles.successBox}>
+                <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                <Text style={styles.successText}>{successMessage}</Text>
+              </Animated.View>
+            ) : null}
+            {error ? (
+              <Animated.View entering={FadeIn.duration(220)} exiting={FadeOut.duration(150)} style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={18} color="#DC2626" />
+                <Text style={styles.errorText}>{error}</Text>
+              </Animated.View>
+            ) : null}
 
-          {/* Error */}
-          {error ? (
-            <Animated.View entering={FadeIn.duration(220)} exiting={FadeOut.duration(150)} style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={18} color="#DC2626" />
-              <Text style={styles.errorText}>{error}</Text>
-            </Animated.View>
-          ) : null}
-
-          {/* Fields */}
-          <View style={styles.fields}>
-            <View>
+            {/* ── Email ── */}
+            <View style={styles.fieldGroup}>
               <Text style={styles.label}>Email адрес</Text>
               <TextInput
                 style={inputStyle('email')}
@@ -249,161 +277,138 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 autoComplete="email"
-                returnKeyType={isForgot ? 'done' : 'next'}
+                returnKeyType="next"
                 value={email}
                 onChangeText={setEmail}
-                editable={!submitting}
+                editable={!isLoading}
                 onFocus={() => setFocusedField('email')}
                 onBlur={() => setFocusedField(null)}
-                onSubmitEditing={() => {
-                  if (!isForgot) passwordRef.current?.focus();
-                  else void handleSubmit();
-                }}
+                onSubmitEditing={() => passwordRef.current?.focus()}
               />
             </View>
 
-            {!isForgot ? (
-              <>
-                <View>
-                  <Text style={styles.label}>Парола</Text>
-                  <View style={styles.inputWrap}>
-                    <TextInput
-                      ref={passwordRef}
-                      style={[inputStyle('password'), styles.inputWithIcon]}
-                      placeholder="••••••••"
-                      placeholderTextColor="#94A3B8"
-                      secureTextEntry={!showPassword}
-                      textContentType={isRegister ? 'newPassword' : 'password'}
-                      autoComplete={isRegister ? 'new-password' : 'current-password'}
-                      returnKeyType={isRegister ? 'next' : 'done'}
-                      value={password}
-                      onChangeText={setPassword}
-                      editable={!submitting}
-                      onFocus={() => setFocusedField('password')}
-                      onBlur={() => setFocusedField(null)}
-                      onSubmitEditing={() => {
-                        if (isRegister) confirmRef.current?.focus();
-                        else void handleSubmit();
-                      }}
-                    />
-                    <Pressable
-                      style={styles.eyeBtn}
-                      onPress={() => setShowPassword((v) => !v)}
-                      accessibilityLabel={showPassword ? 'Скрий паролата' : 'Покажи паролата'}>
-                      <Ionicons
-                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                        size={20}
-                        color="#94A3B8"
-                      />
-                    </Pressable>
-                  </View>
-                </View>
-
-                {isRegister ? (
-                  <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)}>
-                    <Text style={styles.label}>Потвърди паролата</Text>
-                    <View style={styles.inputWrap}>
-                      <TextInput
-                        ref={confirmRef}
-                        style={[inputStyle('confirm'), styles.inputWithIcon]}
-                        placeholder="••••••••"
-                        placeholderTextColor="#94A3B8"
-                        secureTextEntry={!showConfirm}
-                        textContentType="newPassword"
-                        autoComplete="new-password"
-                        returnKeyType="done"
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                        editable={!submitting}
-                        onFocus={() => setFocusedField('confirm')}
-                        onBlur={() => setFocusedField(null)}
-                        onSubmitEditing={() => void handleSubmit()}
-                      />
-                      <Pressable
-                        style={styles.eyeBtn}
-                        onPress={() => setShowConfirm((v) => !v)}
-                        accessibilityLabel={showConfirm ? 'Скрий паролата' : 'Покажи паролата'}>
-                        <Ionicons
-                          name={showConfirm ? 'eye-off-outline' : 'eye-outline'}
-                          size={20}
-                          color="#94A3B8"
-                        />
-                      </Pressable>
-                    </View>
-                  </Animated.View>
-                ) : null}
-              </>
-            ) : null}
-          </View>
-
-          {/* Submit button */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              submitting && styles.buttonDisabled,
-              pressed && !submitting && styles.buttonPressed,
-            ]}
-            onPress={() => void handleSubmit()}
-            disabled={submitting}
-            accessibilityRole="button">
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>
-                {isLogin ? 'Влез в акаунта' : isRegister ? 'Създай акаунт' : 'Изпрати линк'}
-              </Text>
-            )}
-          </Pressable>
-
-          {/* Forgot password link */}
-          {isLogin ? (
-            <Pressable
-              style={styles.forgotLink}
-              onPress={() => switchMode('forgot')}
-              accessibilityRole="button">
-              <Text style={styles.forgotLinkText}>Забравена парола?</Text>
-            </Pressable>
-          ) : null}
-
-          {/* Divider */}
-          {!isForgot ? (
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>или</Text>
-              <View style={styles.dividerLine} />
+            {/* ── Password ── */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Парола</Text>
+              <View style={styles.inputWrap}>
+                <TextInput
+                  ref={passwordRef}
+                  style={[inputStyle('password'), styles.inputWithIcon]}
+                  placeholder="••••••••"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showPassword}
+                  textContentType={isRegister ? 'newPassword' : 'password'}
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
+                  returnKeyType={isRegister ? 'next' : 'done'}
+                  value={password}
+                  onChangeText={setPassword}
+                  editable={!isLoading}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  onSubmitEditing={() => {
+                    if (isRegister) confirmRef.current?.focus();
+                    else void handleSubmit();
+                  }}
+                />
+                <Pressable
+                  style={styles.eyeBtn}
+                  onPress={() => setShowPassword((v) => !v)}
+                  accessibilityLabel={showPassword ? 'Скрий паролата' : 'Покажи паролата'}>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color="#94A3B8"
+                  />
+                </Pressable>
+              </View>
             </View>
-          ) : null}
 
-          {/* Google Sign In */}
-          {!isForgot ? (
+            {/* ── Confirm password (register only) ── */}
+            {isRegister ? (
+              <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)} style={styles.fieldGroup}>
+                <Text style={styles.label}>Потвърди паролата</Text>
+                <View style={styles.inputWrap}>
+                  <TextInput
+                    ref={confirmRef}
+                    style={[inputStyle('confirm'), styles.inputWithIcon]}
+                    placeholder="••••••••"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showConfirm}
+                    textContentType="newPassword"
+                    autoComplete="new-password"
+                    returnKeyType="done"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    editable={!isLoading}
+                    onFocus={() => setFocusedField('confirm')}
+                    onBlur={() => setFocusedField(null)}
+                    onSubmitEditing={() => void handleSubmit()}
+                  />
+                  <Pressable
+                    style={styles.eyeBtn}
+                    onPress={() => setShowConfirm((v) => !v)}
+                    accessibilityLabel={showConfirm ? 'Скрий паролата' : 'Покажи паролата'}>
+                    <Ionicons
+                      name={showConfirm ? 'eye-off-outline' : 'eye-outline'}
+                      size={20}
+                      color="#94A3B8"
+                    />
+                  </Pressable>
+                </View>
+              </Animated.View>
+            ) : null}
+
+            {/* ── Forgot password link (login only) ── */}
+            {isLogin ? (
+              <Pressable
+                style={styles.forgotLink}
+                onPress={() => switchMode('forgot')}
+                accessibilityRole="button">
+                <Text style={styles.forgotLinkText}>Забравена парола?</Text>
+              </Pressable>
+            ) : null}
+
+            {/* ── Submit ── */}
             <Pressable
               style={({ pressed }) => [
-                styles.googleButton,
-                (googleLoading || submitting) && styles.googleButtonDisabled,
-                pressed && !googleLoading && !submitting && styles.googleButtonPressed,
+                styles.primaryBtn,
+                submitting && styles.btnDisabled,
+                pressed && !submitting && styles.primaryBtnPressed,
               ]}
-              onPress={() => void handleGoogleSignIn()}
-              disabled={googleLoading || submitting}
-              accessibilityRole="button"
-              accessibilityLabel="Влез с Google">
-              {googleLoading ? (
-                <ActivityIndicator color="#374151" size="small" />
+              onPress={() => void handleSubmit()}
+              disabled={isLoading}
+              accessibilityRole="button">
+              {submitting ? (
+                <ActivityIndicator color="#fff" />
               ) : (
-                <>
-                  <AntDesign name="google" size={20} color="#EA4335" />
-                  <Text style={styles.googleButtonText}>Продължи с Google</Text>
-                </>
+                <Text style={styles.primaryBtnText}>
+                  {isLogin ? 'Влез в акаунта' : 'Създай акаунт'}
+                </Text>
               )}
             </Pressable>
-          ) : null}
-        </View>
 
-        {/* Footer */}
+            {/* ── Mode switcher ── */}
+            <View style={styles.modeSwitcher}>
+              <Text style={styles.modeSwitcherText}>
+                {isLogin ? 'Нямаш акаунт?' : 'Вече имаш акаунт?'}
+              </Text>
+              <Pressable
+                onPress={() => switchMode(isLogin ? 'register' : 'login')}
+                accessibilityRole="button">
+                <Text style={styles.modeSwitcherLink}>
+                  {isLogin ? 'Регистрирай се' : 'Влез'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* ── Footer ── */}
         <Text style={styles.footer}>
           С използването на приложението приемаш нашите{' '}
           <Text style={styles.footerLink}>Условия за ползване</Text>
           {' '}и{' '}
-          <Text style={styles.footerLink}>Политика за поверителност</Text>.
+          <Text style={styles.footerLink}>Поверителност</Text>.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -418,25 +423,24 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    gap: 24,
+    gap: 28,
   },
 
-  // ─── Brand ───────────────────────────────────────────────────────────
+  // ── Brand ─────────────────────────────────────────────────────────────
   brand: {
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
+    gap: 10,
   },
   logo: {
-    width: 76,
-    height: 76,
-    borderRadius: 20,
+    width: 80,
+    height: 80,
+    borderRadius: 22,
   },
   brandName: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.5,
+    letterSpacing: -0.8,
   },
   brandTagline: {
     fontSize: 15,
@@ -444,80 +448,81 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // ─── Card ─────────────────────────────────────────────────────────────
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 20,
-    gap: 16,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    elevation: 3,
+  // ── Section ───────────────────────────────────────────────────────────
+  section: {
+    gap: 14,
   },
 
-  // ─── Tabs ─────────────────────────────────────────────────────────────
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 13,
-    padding: 4,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  tabActive: {
-    backgroundColor: '#0F172A',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.18,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  tabTextActive: {
-    color: '#FFFFFF',
-  },
-
-  // ─── Forgot header ────────────────────────────────────────────────────
-  forgotHeader: {
-    gap: 6,
-  },
+  // ── Forgot header ─────────────────────────────────────────────────────
   backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     alignSelf: 'flex-start',
-    paddingVertical: 2,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   backBtnText: {
     fontSize: 14,
-    color: '#475569',
+    color: '#64748B',
     fontWeight: '600',
   },
-  forgotTitle: {
-    fontSize: 20,
+  sectionTitle: {
+    fontSize: 22,
     fontWeight: '800',
     color: '#0F172A',
   },
-  forgotSubtitle: {
+  sectionSubtitle: {
     fontSize: 14,
     color: '#64748B',
-    lineHeight: 20,
+    lineHeight: 21,
   },
 
-  // ─── Status boxes ────────────────────────────────────────────────────
+  // ── Google button ─────────────────────────────────────────────────────
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingVertical: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  googleBtnPressed: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
+  },
+  googleBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+
+  // ── Divider ───────────────────────────────────────────────────────────
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginVertical: 2,
+  },
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#CBD5E1',
+  },
+  dividerText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+
+  // ── Status boxes ──────────────────────────────────────────────────────
   successBox: {
     flexDirection: 'row',
     gap: 10,
@@ -551,15 +556,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // ─── Form fields ─────────────────────────────────────────────────────
-  fields: {
-    gap: 14,
+  // ── Form fields ───────────────────────────────────────────────────────
+  fieldGroup: {
+    gap: 6,
   },
   label: {
     fontSize: 13,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 6,
   },
   inputWrap: {
     position: 'relative',
@@ -572,11 +576,10 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'android' ? 11 : 13,
     fontSize: 16,
     color: '#0F172A',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFFFFF',
   },
   inputFocused: {
     borderColor: '#0F172A',
-    backgroundColor: '#FFFFFF',
   },
   inputWithIcon: {
     paddingRight: 48,
@@ -590,90 +593,61 @@ const styles = StyleSheet.create({
     padding: 4,
   },
 
-  // ─── Button ──────────────────────────────────────────────────────────
-  button: {
+  // ── Forgot link ───────────────────────────────────────────────────────
+  forgotLink: {
+    alignSelf: 'flex-end',
+    paddingVertical: 2,
+  },
+  forgotLinkText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+
+  // ── Primary button ────────────────────────────────────────────────────
+  primaryBtn: {
     backgroundColor: '#0F172A',
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: 'center',
-    marginTop: 2,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
   },
-  buttonDisabled: {
-    opacity: 0.55,
-  },
-  buttonPressed: {
+  primaryBtnPressed: {
     opacity: 0.85,
   },
-  buttonText: {
+  btnDisabled: {
+    opacity: 0.5,
+  },
+  primaryBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
 
-  // ─── Forgot link ─────────────────────────────────────────────────────
-  forgotLink: {
+  // ── Mode switcher ─────────────────────────────────────────────────────
+  modeSwitcher: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 2,
+    gap: 5,
+    paddingTop: 4,
   },
-  forgotLinkText: {
+  modeSwitcherText: {
     fontSize: 14,
     color: '#64748B',
-    fontWeight: '600',
+  },
+  modeSwitcherLink: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
   },
 
-  // ─── Divider ─────────────────────────────────────────────────────────
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E2E8F0',
-  },
-  dividerText: {
-    fontSize: 13,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-
-  // ─── Google button ───────────────────────────────────────────────────
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    paddingVertical: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  googleButtonDisabled: {
-    opacity: 0.55,
-  },
-  googleButtonPressed: {
-    backgroundColor: '#F8FAFC',
-  },
-  googleButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#374151',
-  },
-
-  // ─── Footer ──────────────────────────────────────────────────────────
+  // ── Footer ────────────────────────────────────────────────────────────
   footer: {
     fontSize: 12,
     color: '#94A3B8',
