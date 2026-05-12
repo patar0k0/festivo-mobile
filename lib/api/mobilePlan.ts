@@ -138,11 +138,7 @@ async function requestMobilePlan<T>(path: string, options?: MobilePlanRequestOpt
 
 export async function getMobilePlanState(signal?: AbortSignal): Promise<MobilePlanStateDto> {
   const body = await requestMobilePlan<unknown>('/api/mobile/plan/state', { signal });
-  const parsed = parsePlanState(body);
-  if (__DEV__) {
-    console.log('[plan][GET state] savedFestivalIds=', JSON.stringify(parsed.savedFestivalIds));
-  }
-  return parsed;
+  return parsePlanState(body);
 }
 
 export async function saveFestivalToPlan(festivalId: string): Promise<{ saved: boolean; festivalId: string }> {
@@ -155,14 +151,10 @@ export async function saveFestivalToPlan(festivalId: string): Promise<{ saved: b
 export async function removeFestivalFromPlan(
   festivalId: string,
 ): Promise<{ saved: boolean; festivalId: string }> {
-  const res = await requestMobilePlan<{ saved: boolean; festivalId: string }>(
-    '/api/mobile/plan/festivals',
-    { method: 'DELETE', body: { festivalId } },
-  );
-  if (__DEV__) {
-    console.log('[plan][DELETE response]', JSON.stringify(res));
-  }
-  return res;
+  return requestMobilePlan('/api/mobile/plan/festivals', {
+    method: 'DELETE',
+    body: { festivalId },
+  });
 }
 
 export async function toggleScheduleItemInPlan(
