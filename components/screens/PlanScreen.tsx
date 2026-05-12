@@ -120,7 +120,17 @@ function formatCalendarDateLabel(dateIso: string): string {
 }
 
 function buildNextReminderPreview(festivals: FestivalListItem[], reminders: Record<string, { type: MobilePlanReminderType }>): string {
+  // Past festivals can no longer receive a reminder — exclude them so the
+  // preview reflects the next upcoming reminder, not the earliest saved
+  // festival overall. A festival is past when its last day is strictly
+  // before today (same rule as resolveGroup).
+  const today = Math.floor(Date.now() / 86_400_000);
+  const isUpcoming = (festival: FestivalListItem) => {
+    const lastDay = parseDay(festival.end_date || festival.start_date);
+    return lastDay != null && lastDay >= today;
+  };
   const next = festivals
+    .filter((festival) => isUpcoming(festival))
     .filter((festival) => (reminders[festival.festivalId]?.type ?? 'default') !== 'none')
     .sort((a, b) => {
       const ta = Date.parse(a.start_date) || Infinity;
