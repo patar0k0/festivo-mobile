@@ -1,5 +1,6 @@
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
@@ -406,9 +407,17 @@ export default function LoginScreen() {
         {/* ── Footer ── */}
         <Text style={styles.footer}>
           С използването на приложението приемаш нашите{' '}
-          <Text style={styles.footerLink}>Условия за ползване</Text>
+          <Text
+            style={styles.footerLink}
+            onPress={() => void WebBrowser.openBrowserAsync('https://festivo.bg/terms')}>
+            Условия за ползване
+          </Text>
           {' '}и{' '}
-          <Text style={styles.footerLink}>Поверителност</Text>.
+          <Text
+            style={styles.footerLink}
+            onPress={() => void WebBrowser.openBrowserAsync('https://festivo.bg/privacy')}>
+            Поверителност
+          </Text>.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
