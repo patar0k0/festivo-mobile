@@ -78,6 +78,28 @@ const ICON_TO_EMOJI: Record<string, string> = {
   festival: '🎉',
 };
 
+/**
+ * Returns an emoji for a category based on Bulgarian label text + optional icon slug.
+ * Falls back to keyword matching when the icon slug is missing or unknown.
+ */
+function emojiForCategoryLabel(label: string, iconSlug?: string): string {
+  if (iconSlug && ICON_TO_EMOJI[iconSlug]) return ICON_TO_EMOJI[iconSlug]!;
+  const l = label.toLowerCase();
+  if (l.includes('музик') || l.includes('концерт') || l.includes('music')) return '🎵';
+  if (l.includes('фолклор') || l.includes('народ') || l.includes('традиц')) return '🎻';
+  if (l.includes('храна') || l.includes('кулинар') || l.includes('гурме') || l.includes('food')) return '🍲';
+  if (l.includes('занаят') || l.includes('craft') || l.includes('базар') || l.includes('market')) return '🧶';
+  if (l.includes('семей') || l.includes('детск') || l.includes('family')) return '👨‍👩‍👧';
+  if (l.includes('танц') || l.includes('dance')) return '💃';
+  if (l.includes('театър') || l.includes('theatre') || l.includes('изкуств') || l.includes('арт')) return '🎭';
+  if (l.includes('филм') || l.includes('кино') || l.includes('film')) return '🎬';
+  if (l.includes('спорт') || l.includes('sport')) return '🏅';
+  if (l.includes('пазар') || l.includes('market')) return '🛍️';
+  if (l.includes('събор')) return '🎪';
+  if (l.includes('туристи')) return '🗺️';
+  return '🎉';
+}
+
 const NOTIFICATION_META: Record<string, string> = {
   categories: 'Нови фестивали по категории',
   cities: 'Нови събития по градове',
@@ -323,13 +345,14 @@ export default function OnboardingScreen() {
   const categoryEmojiBySlug = useMemo(() => {
     const map: Record<string, string> = {};
     for (const m of mergedCategories) {
-      const fromIcon = m.icon ? ICON_TO_EMOJI[m.icon] : undefined;
-      const emoji = fromIcon ?? CATEGORY_META[m.slug]?.emoji ?? '🎉';
+      const emoji = emojiForCategoryLabel(m.label_bg, m.icon);
       map[m.slug] = emoji;
       for (const s of m.mergedSlugs) map[s] = emoji;
     }
     for (const slug of draft.categories) {
-      if (!map[slug]) map[slug] = CATEGORY_META[slug]?.emoji ?? '🎉';
+      if (!map[slug]) {
+        map[slug] = CATEGORY_META[slug]?.emoji ?? emojiForCategoryLabel(CATEGORY_META[slug]?.label ?? slug);
+      }
     }
     return map;
   }, [mergedCategories, draft.categories]);
@@ -469,18 +492,46 @@ export default function OnboardingScreen() {
 
   if (!hydrated) {
     return (
-      <View style={styles.root}>
-        <Text style={styles.title}>Зареждаме персонализация...</Text>
+      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center', gap: 12 }]}>
+        <ExpoImage source={require('@/assets/images/icon.png')} style={{ width: 56, height: 56, borderRadius: 14 }} contentFit="contain" />
+        <Text style={{ fontSize: 16, color: '#64748B', fontWeight: '600' }}>Зареждаме персонализация...</Text>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.header}>
-        <Text style={styles.stepLabel}>Стъпка {step + 1} от 5</Text>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        {/* Brand row + step counter */}
+        <View style={styles.headerRow}>
+          <View style={styles.headerBrand}>
+            <ExpoImage
+              source={require('@/assets/images/icon.png')}
+              style={styles.headerLogo}
+              contentFit="contain"
+            />
+            <Text style={styles.headerBrandName}>Festivo</Text>
+          </View>
+          <View style={styles.stepBadge}>
+            <Text style={styles.stepBadgeText}>{step + 1} / 5</Text>
+          </View>
+        </View>
+        {/* Progress bar */}
         <View style={styles.progressTrack}>
           <Animated.View style={[styles.progressFill, progressStyle]} />
+        </View>
+        {/* Step dots */}
+        <View style={styles.stepDots}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <View
+              key={i}
+              style={[
+                styles.stepDot,
+                i < step && styles.stepDotDone,
+                i === step && styles.stepDotActive,
+              ]}
+            />
+          ))}
         </View>
       </View>
 
@@ -494,8 +545,10 @@ export default function OnboardingScreen() {
           exiting={reduceMotion ? undefined : FadeOut.duration(150)}
           style={[styles.card, stepCardStyle]}
           layout={LinearTransition.springify()}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>{subtitle}</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
+          </View>
           {showSuggestionsRetry ? (
             <View style={styles.retryBox}>
               <Text style={styles.retryText}>Не успяхме да заредим персонализирани предложения.</Text>
@@ -757,55 +810,126 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { paddingHorizontal: 20, paddingTop: 16, gap: 8 },
-  stepLabel: { fontSize: 13, color: '#64748B', fontWeight: '700' },
-  progressTrack: { height: 6, borderRadius: 999, backgroundColor: '#E2E8F0', overflow: 'hidden' },
-  progressFill: { height: 6, borderRadius: 999, backgroundColor: '#0F172A', width: '100%' },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 12 },
-  card: {
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
+
+  // ── Header ──────────────────────────────────────────────────────────
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 14,
     gap: 10,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  title: { fontSize: 28, fontWeight: '800', color: '#0F172A', lineHeight: 33 },
-  subtitle: { fontSize: 15, color: '#475569', lineHeight: 22 },
-  guidance: { fontSize: 13, color: '#475569', fontWeight: '600' },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+  },
+  headerBrandName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  stepBadge: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  stepBadgeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  progressTrack: {
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#0F172A',
+    width: '100%',
+  },
+  stepDots: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  stepDot: {
+    flex: 1,
+    height: 3,
+    borderRadius: 999,
+    backgroundColor: '#E2E8F0',
+  },
+  stepDotDone: {
+    backgroundColor: '#64748B',
+  },
+  stepDotActive: {
+    backgroundColor: '#0F172A',
+  },
+
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 20 },
+
+  card: {
+    gap: 16,
+  },
+  cardHeader: {
+    gap: 6,
+  },
+  title: { fontSize: 26, fontWeight: '800', color: '#0F172A', lineHeight: 32 },
+  subtitle: { fontSize: 15, color: '#64748B', lineHeight: 22 },
+  guidance: { fontSize: 13, color: '#64748B', fontWeight: '600' },
   chipsGrid: { gap: 8 },
   chipsGridTwoCol: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, rowGap: 8, justifyContent: 'flex-start' },
   chipGridCell: { flexGrow: 1, maxWidth: '100%' },
   richChip: {
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     backgroundColor: '#FFFFFF',
     gap: 4,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-  richChipCompact: { paddingVertical: 8, paddingHorizontal: 10, minHeight: 72, justifyContent: 'center' },
+  richChipCompact: { paddingVertical: 10, paddingHorizontal: 12, minHeight: 68, justifyContent: 'center' },
   richChipActive: {
     backgroundColor: '#0F172A',
     borderColor: '#0F172A',
-    borderWidth: 2,
+    borderWidth: 1.5,
     shadowColor: '#0F172A',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   chipTitleRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'center' },
   richChipTitle: { fontSize: 14, color: '#0F172A', fontWeight: '700', flexShrink: 1 },
   richChipTitleCompact: { fontSize: 13, lineHeight: 18 },
   richChipTitleActive: { color: '#FFFFFF' },
-  richChipSub: { fontSize: 12, color: '#64748B' },
+  richChipSub: { fontSize: 12, color: '#64748B', lineHeight: 16 },
   richChipSubCompact: { fontSize: 11, lineHeight: 15 },
-  richChipSubActive: { color: '#CBD5E1' },
-  chipBadge: { fontSize: 11, color: '#334155', fontWeight: '700', backgroundColor: '#E2E8F0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
-  chipBadgeActive: { color: '#0F172A', backgroundColor: '#F8FAFC' },
+  richChipSubActive: { color: '#94A3B8' },
+  chipBadge: { fontSize: 10, color: '#334155', fontWeight: '700', backgroundColor: '#E2E8F0', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
+  chipBadgeActive: { color: '#0F172A', backgroundColor: '#FFFFFF22' },
   searchInput: {
     borderWidth: 1,
     borderColor: '#CBD5E1',
@@ -909,8 +1033,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 20,
-    paddingTop: 10,
-    backgroundColor: '#FFFFFFF2',
+    paddingTop: 12,
+    backgroundColor: '#F8FAFC',
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
     flexDirection: 'row',
@@ -918,20 +1042,25 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#0F172A',
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
-  primaryBtnDisabled: { opacity: 0.7 },
-  primaryBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
+  primaryBtnDisabled: { opacity: 0.6 },
+  primaryBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 16 },
   secondaryBtn: {
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#E2E8F0',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     justifyContent: 'center',
   },
-  secondaryBtnText: { color: '#0F172A', fontWeight: '700', fontSize: 15 },
+  secondaryBtnText: { color: '#475569', fontWeight: '600', fontSize: 15 },
 });
