@@ -1,4 +1,6 @@
 import type { User } from '@supabase/supabase-js';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import {
   createContext,
   createElement,
@@ -13,12 +15,23 @@ import { Platform } from 'react-native';
 
 import { getSupabaseClient, isNativeSupabaseRuntime } from '@/lib/supabase/client';
 
+// Warm up the browser on Android for faster OAuth sheet open
+if (Platform.OS === 'android') {
+  void WebBrowser.warmUpAsync();
+}
+
+export type GoogleSignInResult =
+  | { outcome: 'success' }
+  | { outcome: 'cancelled' }
+  | { outcome: 'error'; error: Error };
+
 export type AuthContextValue = {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error: Error | null }>;
   register: (email: string, password: string) => Promise<{ error: Error | null }>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<GoogleSignInResult>;
   logout: () => Promise<void>;
 };
 
@@ -97,6 +110,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error ? new Error(error.message) : null };
   }, []);
 
+  const signInWithGoogle = useCallback(async (): Promise<GoogleSignInResult> => {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+      return { outcome: 'error', error: new Error('Google sign-in is only available in mobile runtime.') };
+    }
+    const supabase = getSupabaseClient();
+
+    // The deep link Supabase will redirect back to after Google auth
+    const redirectTo = Linking.createURL('/auth/callback');
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true,
+      },
+    });
+
+    if (error || !data.url) {
+      return { outcome: 'error', error: error ? new Error(error.message) : new Error('Failed to get OAuth URL') };
+    }
+
+    // Open Google auth page in an in-app browser
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+    if (result.type === 'cancel' || result.type === 'dismiss') {
+      return { outcome: 'cancelled' };
+    }
+
+    if (result.type !== 'success') {
+      return { outcome: 'error', error: new Error('Authentication failed') };
+    }
+
+    // Exchange the code from the callback URL for a Supabase session
+    const { error: sessionError } = await supabase.auth.exchangeCodeForSession(result.url);
+    if (sessionError) {
+      return { outcome: 'error', error: new Error(sessionError.message) };
+    }
+
+    return { outcome: 'success' };
+  }, []);
+
   const logout = useCallback(async () => {
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
     const supabase = getSupabaseClient();
@@ -104,8 +158,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, login, register, resetPassword, logout }),
-    [user, loading, login, register, resetPassword, logout]
+    () => ({ user, loading, login, register, resetPassword, signInWithGoogle, logout }),
+    [user, loading, login, register, resetPassword, signInWithGoogle, logout]
   );
 
   return createElement(AuthContext.Provider, { value }, children);
