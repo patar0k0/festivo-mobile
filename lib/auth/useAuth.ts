@@ -17,6 +17,8 @@ export type AuthContextValue = {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error: Error | null }>;
+  register: (email: string, password: string) => Promise<{ error: Error | null }>;
+  resetPassword: (email: string) => Promise<{ error: Error | null }>;
   logout: () => Promise<void>;
 };
 
@@ -77,6 +79,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error ? new Error(error.message) : null };
   }, []);
 
+  const register = useCallback(async (email: string, password: string) => {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+      return { error: new Error('Register is only available in mobile runtime.') };
+    }
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.auth.signUp({ email, password });
+    return { error: error ? new Error(error.message) : null };
+  }, []);
+
+  const resetPassword = useCallback(async (email: string) => {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+      return { error: new Error('Reset password is only available in mobile runtime.') };
+    }
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    return { error: error ? new Error(error.message) : null };
+  }, []);
+
   const logout = useCallback(async () => {
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
     const supabase = getSupabaseClient();
@@ -84,8 +104,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, login, logout }),
-    [user, loading, login, logout]
+    () => ({ user, loading, login, register, resetPassword, logout }),
+    [user, loading, login, register, resetPassword, logout]
   );
 
   return createElement(AuthContext.Provider, { value }, children);
