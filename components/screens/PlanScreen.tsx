@@ -1,4 +1,5 @@
 import { useQueries } from '@tanstack/react-query';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import * as Haptics from 'expo-haptics';
@@ -17,8 +18,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ReminderBottomSheet } from '@/components/plan/ReminderBottomSheet';
+import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
 import { AnimatedCount } from '@/components/ui/AnimatedCount';
 import { FestivalCard, festivalUi } from '@/components/ui/FestivalCard';
+import { getRelativeDateLabel, getStartsInLabelBg } from '@/lib/festival/relativeDate';
 import {
   getFestivalBySlug,
   type FestivalDetail,
@@ -318,6 +321,143 @@ function PlannerCalendar({
   );
 }
 
+function StatTile({ value, label }: { value: number; label: string }) {
+  return (
+    <View style={styles.statTile}>
+      <AnimatedCount style={styles.statTileValue} value={String(value)} />
+      <Text style={styles.statTileLabel}>{label}</Text>
+    </View>
+  );
+}
+
+type PlannedFestivalRowProps = {
+  item: FestivalListItem;
+  reminder: MobilePlanReminderType;
+  reminderLabel: string;
+  plannedItemCount: number;
+  removing: boolean;
+  hasOrganizer: boolean;
+  onPressCard: () => void;
+  onPressProgram: () => void;
+  onPressReminder: () => void;
+  onPressMap: () => void;
+  onPressOrganizer: () => void;
+  onPressRemove: () => void;
+};
+
+function PlannedFestivalRow({
+  item,
+  reminder,
+  reminderLabel,
+  plannedItemCount,
+  removing,
+  hasOrganizer,
+  onPressCard,
+  onPressProgram,
+  onPressReminder,
+  onPressMap,
+  onPressOrganizer,
+  onPressRemove,
+}: PlannedFestivalRowProps) {
+  const dateLabel = getRelativeDateLabel(item.start_date);
+  const startsIn = getStartsInLabelBg(item.start_date);
+  const thumbUri = item.image_url ?? undefined;
+  const reminderActive = reminder !== 'none';
+  return (
+    <Pressable
+      onPress={onPressCard}
+      style={({ pressed }) => [styles.rowCard, pressed && styles.rowCardPressed]}>
+      <View style={styles.rowMain}>
+        <View style={styles.rowThumbWrap}>
+          {thumbUri ? (
+            <ExpoImage
+              source={{ uri: thumbUri }}
+              style={styles.rowThumb}
+              contentFit="cover"
+              transition={180}
+              cachePolicy="memory-disk"
+            />
+          ) : (
+            <View style={styles.rowThumbPlaceholder}>
+              <Text style={styles.rowThumbEmoji}>🎉</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.rowBody}>
+          <Text style={styles.rowTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          <Text style={styles.rowMeta} numberOfLines={1}>
+            {(item.city || 'България') + ' · ' + dateLabel}
+          </Text>
+          {startsIn ? (
+            <Text style={styles.rowSub} numberOfLines={1}>
+              {startsIn}
+            </Text>
+          ) : null}
+        </View>
+        <View pointerEvents="none" style={styles.rowSavedIcon}>
+          <AnimatedBookmark filled size={18} color={festivalUi.colors.text} />
+        </View>
+      </View>
+
+      {plannedItemCount > 0 ? (
+        <Pressable
+          onPress={onPressProgram}
+          style={({ pressed }) => [styles.rowProgramChip, pressed && styles.rowProgramChipPressed]}>
+          <Text style={styles.rowProgramChipText}>
+            {plannedItemCount === 1 ? '1 точка от програмата' : `${plannedItemCount} точки от програмата`}
+          </Text>
+          <Text style={styles.rowProgramChipArrow}>›</Text>
+        </Pressable>
+      ) : null}
+
+      <View style={styles.rowActions}>
+        <Pressable
+          onPress={onPressReminder}
+          style={({ pressed }) => [
+            styles.rowReminderChip,
+            reminderActive && styles.rowReminderChipActive,
+            pressed && styles.rowChipPressed,
+          ]}>
+          <Text style={styles.rowReminderEmoji}>{reminderActive ? '🔔' : '🔕'}</Text>
+          <Text
+            style={[styles.rowReminderText, reminderActive && styles.rowReminderTextActive]}
+            numberOfLines={1}>
+            {reminderLabel}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={onPressMap}
+          hitSlop={6}
+          style={({ pressed }) => [styles.rowIconBtn, pressed && styles.rowChipPressed]}>
+          <Text style={styles.rowIconBtnEmoji}>📍</Text>
+        </Pressable>
+        {hasOrganizer ? (
+          <Pressable
+            onPress={onPressOrganizer}
+            hitSlop={6}
+            style={({ pressed }) => [styles.rowIconBtn, pressed && styles.rowChipPressed]}>
+            <Text style={styles.rowIconBtnEmoji}>👤</Text>
+          </Pressable>
+        ) : null}
+        <View style={{ flex: 1 }} />
+        <Pressable
+          onPress={onPressRemove}
+          disabled={removing}
+          hitSlop={6}
+          style={({ pressed }) => [
+            styles.rowRemoveLink,
+            removing && styles.rowRemoveLinkDisabled,
+            pressed && styles.rowChipPressed,
+          ]}>
+          <Text style={styles.rowRemoveText}>{removing ? 'Премахва…' : 'Премахни'}</Text>
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+}
+
 export default function PlanScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -459,14 +599,17 @@ export default function PlanScreen() {
       ]}>
       <View style={styles.statsCard}>
         <Text style={styles.statsTitle}>Моят план</Text>
-        <AnimatedCount style={styles.statsLine} value={`В плана: ${planQuery.stats.savedFestivalCount}`} />
-        <AnimatedCount style={styles.statsLine} value={`Точки от програма: ${planQuery.stats.plannedItemCount}`} />
-        <AnimatedCount style={styles.statsLine} value={`Предстоящи: ${planQuery.stats.upcomingCount}`} />
-        <View style={styles.reminderPreviewBox}>
-          <Text style={styles.reminderPreviewLabel}>Следващо напомняне</Text>
-          <Text style={styles.reminderPreviewText}>{nextReminderPreview}</Text>
-          <Text style={styles.reminderQuietText}>
-            Тихите часове се уважават от сървъра; важните планови напомняния остават подредени според настройките ти.
+        <View style={styles.statTilesRow}>
+          <StatTile value={planQuery.stats.savedFestivalCount} label="В плана" />
+          <View style={styles.statTilesDivider} />
+          <StatTile value={planQuery.stats.plannedItemCount} label="Точки" />
+          <View style={styles.statTilesDivider} />
+          <StatTile value={planQuery.stats.upcomingCount} label="Предстоящи" />
+        </View>
+        <View style={styles.reminderPreviewLine}>
+          <Text style={styles.reminderPreviewLineIcon}>⏰</Text>
+          <Text style={styles.reminderPreviewLineText} numberOfLines={2}>
+            {nextReminderPreview}
           </Text>
         </View>
         <View style={styles.viewTabs}>
@@ -567,60 +710,27 @@ export default function PlanScreen() {
               };
               return (
                 <View key={item.festivalId} style={styles.cardWrap}>
-                  <FestivalCard
-                    variant="compact"
+                  <PlannedFestivalRow
                     item={item}
+                    reminder={reminder}
+                    reminderLabel={REMINDER_LABELS[reminder]}
+                    plannedItemCount={plannedItemCount}
+                    removing={removing}
+                    hasOrganizer={Boolean(item.organizer_name)}
                     onPressCard={() => router.push(festivalDetailHref(item.slug))}
-                    onPressSave={onRemove}
-                    saveDisabled={removing}
+                    onPressProgram={() => {
+                      const day = firstPlannedDayYmd(plannedScheduleEntries, item.festivalId);
+                      router.push(
+                        day ? festivalDetailHref(item.slug, { scheduleDay: day }) : festivalDetailHref(item.slug),
+                      );
+                    }}
+                    onPressReminder={() => openReminderPicker(item.festivalId)}
+                    onPressMap={() => router.push('/(tabs)/map')}
+                    onPressOrganizer={() =>
+                      router.push(`/search?q=${encodeURIComponent(item.organizer_name ?? '')}`)
+                    }
+                    onPressRemove={onRemove}
                   />
-                  {plannedItemCount > 0 ? (
-                    <View style={styles.itemCountChip}>
-                      <Text style={styles.itemCountText}>
-                        {plannedItemCount === 1 ? '1 точка от програмата' : `${plannedItemCount} точки от програмата`}
-                      </Text>
-                    </View>
-                  ) : null}
-                  <View style={styles.inlineActions}>
-                    <Pressable
-                      onPress={() => openReminderPicker(item.festivalId)}
-                      style={[styles.reminderChip, reminder !== 'none' && styles.reminderChipEmphasis]}>
-                      <Text style={[styles.reminderChipText, reminder !== 'none' && styles.reminderChipTextEmphasis]}>
-                        {REMINDER_LABELS[reminder]}
-                      </Text>
-                    </Pressable>
-                    {reminder !== 'none' ? (
-                      <View style={styles.reminderActiveChip}>
-                        <Text style={styles.reminderActiveText}>Напомняне активно</Text>
-                      </View>
-                    ) : null}
-                    {plannedItemCount > 0 ? (
-                      <Pressable
-                        onPress={() => {
-                          const day = firstPlannedDayYmd(plannedScheduleEntries, item.festivalId);
-                          router.push(
-                            day ? festivalDetailHref(item.slug, { scheduleDay: day }) : festivalDetailHref(item.slug),
-                          );
-                        }}
-                        style={styles.secondaryChip}>
-                        <Text style={styles.secondaryChipText}>Програма</Text>
-                      </Pressable>
-                    ) : null}
-                    <Pressable onPress={() => router.push('/(tabs)/map')} style={styles.secondaryChip}>
-                      <Text style={styles.secondaryChipText}>Карта</Text>
-                    </Pressable>
-                    {item.organizer_name ? (
-                      <Pressable onPress={() => router.push(`/search?q=${encodeURIComponent(item.organizer_name ?? '')}`)} style={styles.secondaryChip}>
-                        <Text style={styles.secondaryChipText}>Организатор</Text>
-                      </Pressable>
-                    ) : null}
-                    <Pressable
-                      onPress={onRemove}
-                      disabled={removing}
-                      style={[styles.removeChip, removing && styles.removeChipDisabled]}>
-                      <Text style={styles.removeChipText}>{removing ? 'Премахва...' : 'Премахни'}</Text>
-                    </Pressable>
-                  </View>
                 </View>
               );
             })}
@@ -681,35 +791,57 @@ const styles = StyleSheet.create({
     padding: 14,
     backgroundColor: '#FFFFFF',
   },
-  statsTitle: { fontSize: 20, fontWeight: '800', color: festivalUi.colors.text, marginBottom: 8 },
+  statsTitle: { fontSize: 20, fontWeight: '800', color: festivalUi.colors.text, marginBottom: 10 },
   statsLine: { fontSize: 14, color: festivalUi.colors.secondary, fontWeight: '600' },
-  reminderPreviewBox: {
-    marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E0E7FF',
-    backgroundColor: '#EEF2FF',
-    padding: 10,
+  statTilesRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingVertical: 4,
   },
-  reminderPreviewLabel: {
+  statTile: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  statTileValue: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: festivalUi.colors.text,
+    letterSpacing: -0.5,
+  },
+  statTileLabel: {
+    marginTop: 2,
     fontSize: 11,
-    fontWeight: '800',
-    color: '#3730A3',
+    fontWeight: '700',
+    color: festivalUi.colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
-  reminderPreviewText: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: '800',
-    color: festivalUi.colors.text,
+  statTilesDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 6,
+  },
+  reminderPreviewLine: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+  },
+  reminderPreviewLineIcon: {
+    fontSize: 14,
     lineHeight: 18,
   },
-  reminderQuietText: {
-    marginTop: 5,
-    fontSize: 12,
-    color: '#4B5563',
-    lineHeight: 17,
+  reminderPreviewLineText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: festivalUi.colors.text,
+    lineHeight: 18,
   },
   viewTabs: {
     marginTop: 12,
@@ -987,4 +1119,132 @@ const styles = StyleSheet.create({
   removeChipDisabled: { opacity: 0.5 },
   pastToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   pastToggleText: { fontSize: 13, fontWeight: '700', color: '#4F46E5' },
+
+  // Planned festival row (redesigned card)
+  rowCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    gap: 10,
+  },
+  rowCardPressed: { opacity: 0.92 },
+  rowMain: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  rowThumbWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+  },
+  rowThumb: { width: '100%', height: '100%' },
+  rowThumbPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowThumbEmoji: { fontSize: 26 },
+  rowBody: { flex: 1, minWidth: 0, paddingRight: 22 },
+  rowTitle: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: festivalUi.colors.text,
+    lineHeight: 20,
+  },
+  rowMeta: {
+    marginTop: 4,
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: festivalUi.colors.secondary,
+  },
+  rowSub: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  rowSavedIcon: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+  },
+  rowProgramChip: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    backgroundColor: '#F0FDF4',
+  },
+  rowProgramChipPressed: { opacity: 0.8 },
+  rowProgramChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  rowProgramChipArrow: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#166534',
+    marginTop: -1,
+  },
+  rowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 10,
+  },
+  rowChipPressed: { opacity: 0.7 },
+  rowReminderChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    maxWidth: '52%',
+  },
+  rowReminderChipActive: {
+    borderColor: '#C7D2FE',
+    backgroundColor: '#EEF2FF',
+  },
+  rowReminderEmoji: { fontSize: 12 },
+  rowReminderText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: festivalUi.colors.text,
+  },
+  rowReminderTextActive: { color: '#3730A3' },
+  rowIconBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  rowIconBtnEmoji: { fontSize: 14 },
+  rowRemoveLink: { paddingVertical: 4, paddingHorizontal: 4 },
+  rowRemoveLinkDisabled: { opacity: 0.5 },
+  rowRemoveText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
 });
