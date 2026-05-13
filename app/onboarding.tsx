@@ -446,28 +446,25 @@ export default function OnboardingScreen() {
   const finish = async (skipped: boolean) => {
     if (submitting) return;
     setSubmitting(true);
-    // `completed` must be true for either path. The root layout uses
-    // `!draft.completed` as a guard that snaps the user back into
-    // /onboarding, so leaving completed=false on Skip caused the screen
-    // to bounce right back ("Пропусни засега" looked like a no-op).
-    // `skipped` is retained as a signal for analytics / future
-    // personalization (was the user engaged, or did they opt out).
+    // completed=true for both Done and Skip so the root layout guard
+    // (!draft.completed → bounce back to /onboarding) lets us out.
+    // `skipped` is retained as a separate signal for analytics.
     const finalState: OnboardingDraft = { ...draft, completed: true, skipped, step: 4 };
-    // Persist + sync are both best-effort; neither must block navigation
-    // away from onboarding. Previously a thrown persist left submitting
-    // stuck on true and the user could not exit by tapping Skip again.
-    try {
-      await persist(finalState);
-    } catch (err) {
-      if (__DEV__) console.warn('[onboarding] persist failed', err);
-    }
-    try {
-      await syncOnboardingToBackend(finalState);
-    } catch {
-      // keep flow resilient; local state remains saved for resume/retry
-    }
-    setSubmitting(false);
+
+    // Navigate FIRST. Previously persist() called setDraft({step: 4})
+    // before the await chain finished, which forced a render of the
+    // last step ("Организатори") before navigation actually happened —
+    // tapping Skip on step 1 looked like a jump through the flow.
+    // saveOnboardingDraft writes to AsyncStorage directly, no React
+    // state involved, so it's safe to run after navigation.
     router.replace('/(tabs)');
+
+    void saveOnboardingDraft(finalState).catch((err) => {
+      if (__DEV__) console.warn('[onboarding] persist failed', err);
+    });
+    void syncOnboardingToBackend(finalState).catch(() => {
+      // best-effort; local state is enough to mark onboarding done
+    });
   };
 
   const progressStyle = useAnimatedStyle(() => ({
