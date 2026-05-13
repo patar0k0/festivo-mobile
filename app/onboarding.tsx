@@ -446,7 +446,13 @@ export default function OnboardingScreen() {
   const finish = async (skipped: boolean) => {
     if (submitting) return;
     setSubmitting(true);
-    const finalState: OnboardingDraft = { ...draft, completed: !skipped, skipped, step: 4 };
+    // `completed` must be true for either path. The root layout uses
+    // `!draft.completed` as a guard that snaps the user back into
+    // /onboarding, so leaving completed=false on Skip caused the screen
+    // to bounce right back ("Пропусни засега" looked like a no-op).
+    // `skipped` is retained as a signal for analytics / future
+    // personalization (was the user engaged, or did they opt out).
+    const finalState: OnboardingDraft = { ...draft, completed: true, skipped, step: 4 };
     // Persist + sync are both best-effort; neither must block navigation
     // away from onboarding. Previously a thrown persist left submitting
     // stuck on true and the user could not exit by tapping Skip again.
