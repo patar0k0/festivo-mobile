@@ -447,15 +447,21 @@ export default function OnboardingScreen() {
     if (submitting) return;
     setSubmitting(true);
     const finalState: OnboardingDraft = { ...draft, completed: !skipped, skipped, step: 4 };
-    await persist(finalState);
+    // Persist + sync are both best-effort; neither must block navigation
+    // away from onboarding. Previously a thrown persist left submitting
+    // stuck on true and the user could not exit by tapping Skip again.
+    try {
+      await persist(finalState);
+    } catch (err) {
+      if (__DEV__) console.warn('[onboarding] persist failed', err);
+    }
     try {
       await syncOnboardingToBackend(finalState);
     } catch {
       // keep flow resilient; local state remains saved for resume/retry
-    } finally {
-      setSubmitting(false);
-      router.replace('/(tabs)');
     }
+    setSubmitting(false);
+    router.replace('/(tabs)');
   };
 
   const progressStyle = useAnimatedStyle(() => ({
@@ -787,8 +793,17 @@ export default function OnboardingScreen() {
       </ScrollView>
 
       <Animated.View style={[styles.footer, { paddingBottom: 14 + insets.bottom }]} layout={LinearTransition.springify()}>
-        <Pressable onPress={() => finish(true)} style={styles.secondaryBtn} accessibilityRole="button">
-          <Text style={styles.secondaryBtnText}>Пропусни засега</Text>
+        <Pressable
+          onPress={() => finish(true)}
+          disabled={submitting}
+          hitSlop={8}
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.skipBtn,
+            pressed && styles.skipBtnPressed,
+            submitting && styles.skipBtnDisabled,
+          ]}>
+          <Text style={styles.skipBtnText}>Пропусни засега</Text>
         </Pressable>
         {isLast ? (
           <Pressable
@@ -1063,4 +1078,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryBtnText: { color: '#475569', fontWeight: '600', fontSize: 15 },
+  // Tertiary text-style "Skip" — deliberately less visual weight than the
+  // primary CTA so the user's eye lands on Готово / Напред first.
+  skipBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    justifyContent: 'center',
+  },
+  skipBtnPressed: { opacity: 0.55 },
+  skipBtnDisabled: { opacity: 0.4 },
+  skipBtnText: {
+    color: '#64748B',
+    fontWeight: '600',
+    fontSize: 14,
+    textDecorationLine: 'underline',
+    textDecorationColor: '#CBD5E1',
+  },
 });
