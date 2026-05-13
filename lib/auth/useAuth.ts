@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isNativeSupabaseRuntime()) {
+    if (!isNativeSupabaseRuntime() && Platform.OS !== 'web') {
       setUser(null);
       setLoading(false);
       return;
@@ -84,27 +84,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
-      return { error: new Error('Login is only available in mobile runtime.') };
-    }
     const supabase = getSupabaseClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error ? new Error(error.message) : null };
   }, []);
 
   const register = useCallback(async (email: string, password: string) => {
-    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
-      return { error: new Error('Register is only available in mobile runtime.') };
-    }
     const supabase = getSupabaseClient();
     const { error } = await supabase.auth.signUp({ email, password });
     return { error: error ? new Error(error.message) : null };
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {
-    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
-      return { error: new Error('Reset password is only available in mobile runtime.') };
-    }
     const supabase = getSupabaseClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     return { error: error ? new Error(error.message) : null };

@@ -6,6 +6,7 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 let supabaseInstance: SupabaseClient | null = null;
+let webSupabaseInstance: SupabaseClient | null = null;
 
 export function isNativeSupabaseRuntime(): boolean {
   const isNativePlatform = Platform.OS === 'ios' || Platform.OS === 'android';
@@ -13,6 +14,20 @@ export function isNativeSupabaseRuntime(): boolean {
 }
 
 export function getSupabaseClient(): SupabaseClient {
+  // Web (expo web) — uses default localStorage-based auth for dev/testing
+  if (Platform.OS === 'web') {
+    if (!webSupabaseInstance) {
+      webSupabaseInstance = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+        },
+      });
+    }
+    return webSupabaseInstance;
+  }
+
   if (!isNativeSupabaseRuntime()) {
     throw new Error('Supabase client is only available in React Native runtime.');
   }

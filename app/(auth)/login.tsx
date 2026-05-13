@@ -615,13 +615,13 @@ const styles = StyleSheet.create({
 
   // ── Primary button ────────────────────────────────────────────────────
   primaryBtn: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#7c2d12',
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: 'center',
-    shadowColor: '#0F172A',
+    shadowColor: '#7c2d12',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },
