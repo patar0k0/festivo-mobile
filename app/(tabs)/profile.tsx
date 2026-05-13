@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type Href, useRouter } from 'expo-router';
 import { useCallback, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
@@ -31,6 +32,24 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, loading } = useAuth();
   const debugPressRef = useRef({ count: 0, firstAt: 0 });
+
+  const handleResetOnboarding = useCallback(() => {
+    Alert.alert(
+      'Нулирай персонализацията?',
+      'Onboarding-а ще се появи отново при следващото отваряне на приложението.',
+      [
+        { text: 'Отказ', style: 'cancel' },
+        {
+          text: 'Нулирай',
+          style: 'destructive',
+          onPress: async () => {
+            await AsyncStorage.removeItem('festivo.onboarding.v1');
+            router.replace('/onboarding');
+          },
+        },
+      ],
+    );
+  }, [router]);
 
   const handleVersionLongPress = useCallback(() => {
     const now = Date.now();
@@ -88,6 +107,15 @@ export default function ProfileScreen() {
           </Pressable>
         ))}
       </View>
+
+      {__DEV__ ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleResetOnboarding}
+          style={({ pressed }) => [styles.devResetBtn, pressed && styles.devResetBtnPressed]}>
+          <Text style={styles.devResetText}>Dev · нулирай onboarding</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -172,5 +200,20 @@ const styles = StyleSheet.create({
   settingsRowPressed: {
     opacity: 0.75,
     backgroundColor: '#F6F7F9',
+  },
+  devResetBtn: {
+    marginTop: 16,
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#CBD5E1',
+  },
+  devResetBtnPressed: { opacity: 0.6 },
+  devResetText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
   },
 });
