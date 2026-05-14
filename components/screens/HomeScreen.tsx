@@ -850,7 +850,10 @@ export default function HomeScreen() {
         source: 'popular',
         variant: 'popular',
         title: 'Най-запазвани',
-        data: popular,
+        // Cap "Най-запазвани" at 5 rows. With the current catalogue the
+        // top 10+ are mostly the same regional folk fests; trimming keeps
+        // the section glanceable instead of feeling like an endless list.
+        data: popular.slice(0, 5),
       });
     }
 
