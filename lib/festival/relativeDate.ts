@@ -3,6 +3,23 @@ function startOfLocalDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
+/**
+ * Whether the festival has finished as of the local calendar day.
+ * Falls back to start_date when end_date is empty. Missing/unparseable
+ * dates are treated as not-past (better to show a TBA festival than
+ * silently hide it).
+ */
+export function isFestivalPast(
+  start_date: string | null | undefined,
+  end_date?: string | null,
+): boolean {
+  const lastIso = (end_date && end_date.trim()) || (start_date && start_date.trim()) || '';
+  if (!lastIso) return false;
+  const last = new Date(lastIso);
+  if (Number.isNaN(last.getTime())) return false;
+  return startOfLocalDay(last).getTime() < startOfLocalDay(new Date()).getTime();
+}
+
 /** Human-readable event date: Днес / Утре / short BG date. */
 export function getRelativeDateLabel(iso: string): string {
   if (!iso?.trim()) return '';
