@@ -27,7 +27,7 @@ import type { FestivalListItem } from '@/lib/api/festivals';
 import { getFestivalBySlug, getFestivals } from '@/lib/api/festivals';
 import { getPersonalizedSections, type PersonalizedSection } from '@/lib/api/recommendations';
 import { debugLogRare } from '@/lib/debug/mobileDiagnosticsHelpers';
-import { formatDateRangeRelative, getRelativeDateLabel } from '@/lib/festival/relativeDate';
+import { formatDateRangeRelative, getRelativeDateLabel, isFestivalPast } from '@/lib/festival/relativeDate';
 import { getRecentlyViewedFestivals, type RecentlyViewedFestival } from '@/lib/personalization/recentlyViewed';
 import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
@@ -657,11 +657,21 @@ export default function HomeScreen() {
     gcTime: 1000 * 60 * 15,
   });
 
-  const trending = useMemo(() => trendingQuery.data ?? [], [trendingQuery.data]);
-  const week = useMemo(() => weekQuery.data ?? [], [weekQuery.data]);
-  const popular = useMemo(() => popularQuery.data ?? [], [popularQuery.data]);
+  // Safety net: even if the server response includes a past festival
+  // (stale cache, missing temporal filter, bad data), the home screen
+  // never renders one. The server should also filter — see
+  // /api/mobile/recommendations and /api/mobile/festivals.
+  const dropPast = (items: FestivalListItem[]) =>
+    items.filter((item) => !isFestivalPast(item.start_date, item.end_date));
+  const trending = useMemo(() => dropPast(trendingQuery.data ?? []), [trendingQuery.data]);
+  const week = useMemo(() => dropPast(weekQuery.data ?? []), [weekQuery.data]);
+  const popular = useMemo(() => dropPast(popularQuery.data ?? []), [popularQuery.data]);
   const personalizedSections = useMemo(
-    () => personalizedQuery.data ?? [],
+    () =>
+      (personalizedQuery.data ?? []).map((section) => ({
+        ...section,
+        items: dropPast(section.items),
+      })),
     [personalizedQuery.data],
   );
   const recommendationPool = useMemo(() => {
@@ -765,7 +775,10 @@ export default function HomeScreen() {
   const showTrendingContent = !trendingQuery.isError && trending.length > 0;
 
   const continueExploring = useMemo(
-    () => (recentlyViewedQuery.data ?? []).slice(0, 6),
+    () =>
+      (recentlyViewedQuery.data ?? [])
+        .filter((item) => !isFestivalPast(item.start_date, item.end_date))
+        .slice(0, 6),
     [recentlyViewedQuery.data],
   );
   const hasFollowedItems = useMemo(
