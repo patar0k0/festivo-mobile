@@ -238,12 +238,41 @@ function PlanViewTab({ label, active, onPress }: { label: string; active: boolea
 function PlannerCalendar({
   groups,
   onPressEntry,
+  loading,
+  hasSavedItems,
 }: {
   groups: { date: string; entries: PlannedScheduleEntry[] }[];
   onPressEntry: (entry: PlannedScheduleEntry) => void;
+  /** True while the festival detail queries (needed to resolve item times) are still in flight. */
+  loading: boolean;
+  /** True when the plan state says the user has at least one schedule item saved on the server. */
+  hasSavedItems: boolean;
 }) {
   const ymdToday = todayYmdLocal();
   if (!groups.length) {
+    // Three distinct empty cases:
+    // - Plan has saved items, details still loading → temporary spinner copy.
+    // - Plan has saved items, details loaded but no matching schedule item id
+    //   in the detail's schedule (data drift / stale cache).
+    // - Plan has nothing saved → onboarding copy.
+    if (loading && hasSavedItems) {
+      return (
+        <View style={styles.emptyCalendar}>
+          <ActivityIndicator size="small" color={festivalUi.colors.text} />
+          <Text style={[styles.emptyCalendarText, { marginTop: 10 }]}>Зарежда се програмата…</Text>
+        </View>
+      );
+    }
+    if (hasSavedItems) {
+      return (
+        <View style={styles.emptyCalendar}>
+          <Text style={styles.emptyCalendarTitle}>Програмата се обновява</Text>
+          <Text style={styles.emptyCalendarText}>
+            Точките са в плана ти, но детайлите за фестивала още не са синхронизирани. Дръпни надолу, за да опресниш.
+          </Text>
+        </View>
+      );
+    }
     return (
       <View style={styles.emptyCalendar}>
         <Text style={styles.emptyCalendarTitle}>Няма избрани часове</Text>
@@ -514,6 +543,28 @@ export default function PlanScreen() {
     () => buildPlannedScheduleEntries(hydratedDetails, planQuery.savedScheduleItemIds),
     [hydratedDetails, planQuery.savedScheduleItemIds],
   );
+
+  // Diagnose the "Точки: N but Календар is empty" mismatch.
+  // Most common cause: the schedule item ids on the server's plan-state
+  // response don't match any item.id in the festival detail's schedule.
+  useEffect(() => {
+    if (!__DEV__) return;
+    const savedIds = planQuery.savedScheduleItemIds;
+    if (savedIds.length === 0) return;
+    if (plannedScheduleEntries.length === savedIds.length) return;
+    const anyLoading = plannedDetailQueries.some((q) => q.isPending || q.isFetching);
+    if (anyLoading) return;
+    const detailItemIds = hydratedDetails.flatMap((d) => (d.schedule_items ?? []).map((i) => i.id));
+    const missing = savedIds.filter((id) => !detailItemIds.includes(id));
+    console.warn('[plan][schedule mismatch]', {
+      savedItemCount: savedIds.length,
+      resolvedEntryCount: plannedScheduleEntries.length,
+      hydratedFestivalCount: hydratedDetails.length,
+      detailItemTotalCount: detailItemIds.length,
+      missingFromDetail: missing.slice(0, 5),
+      savedItemIdsHead: savedIds.slice(0, 5),
+    });
+  }, [hydratedDetails, plannedDetailQueries, plannedScheduleEntries.length, planQuery.savedScheduleItemIds]);
   const nextReminderPreview = useMemo(
     () => buildNextReminderPreview(plannedFestivals, planQuery.reminders),
     [plannedFestivals, planQuery.reminders],
@@ -614,7 +665,7 @@ export default function PlanScreen() {
         </View>
         <View style={styles.viewTabs}>
           <PlanViewTab label="Фестивали" active={viewMode === 'festivals'} onPress={() => setViewMode('festivals')} />
-          <PlanViewTab label="Календар" active={viewMode === 'calendar'} onPress={() => setViewMode('calendar')} />
+          <PlanViewTab label="Програма" active={viewMode === 'calendar'} onPress={() => setViewMode('calendar')} />
         </View>
       </View>
 
@@ -689,6 +740,8 @@ export default function PlanScreen() {
       {viewMode === 'calendar' ? (
         <PlannerCalendar
           groups={calendarGroups}
+          loading={plannedDetailQueries.some((q) => q.isPending || q.isFetching)}
+          hasSavedItems={planQuery.savedScheduleItemIds.length > 0}
           onPressEntry={(entry) => router.push(festivalDetailHref(entry.festivalSlug))}
         />
       ) : (
