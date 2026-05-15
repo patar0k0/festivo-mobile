@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -23,6 +24,7 @@ import { getFestivals } from '@/lib/api/festivals';
 import { trackEvent } from '@/lib/analytics/track';
 import { BULGARIA_REGION, getSofiaRegion, isValidCoordinatePair, looksLikeBulgaria } from '@/lib/map/coordinates';
 import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
+import { formatDateRangeRelative } from '@/lib/festival/relativeDate';
 
 const MAX_VISIBLE_POINTS = 90;
 const MAX_RAW_VIEWPORT = 200;
@@ -520,16 +522,26 @@ export default function FestivalsMapScreen() {
             <Marker
               key={cluster.id}
               coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
-              title={isSingle ? item.title : `${cluster.items.length} festivals`}
+              title={isSingle ? item.title : `${cluster.items.length} фестивала`}
               onPress={() => onSelectCluster(cluster)}
               tracksViewChanges={
                 Platform.OS === 'android' ? androidMapTracksViewChanges : false
               }
-              anchor={{ x: 0.5, y: 0.5 }}
+              anchor={isSingle ? { x: 0.5, y: 1 } : { x: 0.5, y: 0.5 }}
             >
-              <View style={[styles.clusterMarker, isActive && styles.clusterMarkerActive]}>
-                <Text style={styles.clusterText}>{isSingle ? '•' : String(cluster.items.length)}</Text>
-              </View>
+              {isSingle ? (
+                <View style={[styles.pinSingleWrap, isActive && styles.pinSingleWrapActive]}>
+                  <Ionicons
+                    name="location"
+                    size={isActive ? 40 : 32}
+                    color={isActive ? '#4338CA' : '#4F46E5'}
+                  />
+                </View>
+              ) : (
+                <View style={[styles.clusterMarker, isActive && styles.clusterMarkerActive]}>
+                  <Text style={styles.clusterText}>{String(cluster.items.length)}</Text>
+                </View>
+              )}
             </Marker>
           );
         })}
@@ -602,17 +614,34 @@ export default function FestivalsMapScreen() {
                 cachePolicy="memory-disk"
               />
             ) : (
-              <View style={[styles.previewImg, styles.previewPh]} />
+              <View style={[styles.previewImg, styles.previewPh]}>
+                <Ionicons name="image-outline" size={24} color="#9CA3AF" />
+              </View>
             )}
             <View style={styles.previewBody}>
               <Text style={styles.previewTitle} numberOfLines={2}>
                 {selected.title}
               </Text>
+              {selected.start_date ? (
+                <Text style={styles.previewDate} numberOfLines={1}>
+                  {formatDateRangeRelative(selected.start_date, selected.end_date)}
+                </Text>
+              ) : null}
               <Text style={styles.previewMeta} numberOfLines={1}>
                 {selected.city}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={festivalUi.colors.secondary} />
+            <Pressable
+              onPress={() => {
+                void Haptics.selectionAsync();
+                setSelected(null);
+              }}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Затвори"
+              style={({ pressed }) => [styles.previewClose, pressed && styles.previewClosePressed]}>
+              <Ionicons name="close" size={18} color={festivalUi.colors.secondary} />
+            </Pressable>
           </PressableScale>
         </Reanimated.View>
       ) : null}
@@ -683,24 +712,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   clusterMarker: {
-    minWidth: 24,
-    minHeight: 24,
-    paddingHorizontal: 7,
-    borderRadius: 14,
+    minWidth: 30,
+    minHeight: 30,
+    paddingHorizontal: 8,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: '#4F46E5',
     borderWidth: 2,
     borderColor: '#FFFFFF',
+    ...Platform.select({
+      android: { elevation: 4 },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.18,
+        shadowRadius: 4,
+      },
+    }),
   },
   clusterMarkerActive: {
-    transform: [{ scale: 1.16 }],
-    backgroundColor: '#4F46E5',
+    transform: [{ scale: 1.18 }],
+    backgroundColor: '#4338CA',
   },
   clusterText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
+  },
+  pinSingleWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      android: { elevation: 5 },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.22,
+        shadowRadius: 3,
+      },
+    }),
+  },
+  pinSingleWrapActive: {
+    transform: [{ scale: 1.1 }],
   },
   emptyFloating: {
     position: 'absolute',
@@ -739,8 +793,20 @@ const styles = StyleSheet.create({
     }),
   },
   previewImg: { width: 64, height: 64, borderRadius: 12, backgroundColor: '#F3F4F6' },
-  previewPh: { backgroundColor: '#E5E7EB' },
+  previewPh: { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
   previewBody: { flex: 1, minWidth: 0 },
   previewTitle: { fontSize: 16, fontWeight: '800', color: festivalUi.colors.text },
-  previewMeta: { marginTop: 4, fontSize: 14, color: festivalUi.colors.secondary, fontWeight: '600' },
+  previewDate: { marginTop: 4, fontSize: 13, color: '#4F46E5', fontWeight: '700' },
+  previewMeta: { marginTop: 2, fontSize: 13, color: festivalUi.colors.secondary, fontWeight: '600' },
+  previewClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  previewClosePressed: {
+    backgroundColor: '#E5E7EB',
+  },
 });
