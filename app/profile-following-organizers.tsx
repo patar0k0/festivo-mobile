@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -68,12 +69,11 @@ function OrganizerRow({
         hitSlop={12}
         style={({ pressed }) => [styles.unfollowBtn, pressed && !unfollowing && styles.unfollowBtnPressed]}>
         {unfollowing ? (
-          <ActivityIndicator size="small" color={festivalUi.colors.secondary} />
+          <ActivityIndicator size="small" color="#DC2626" />
         ) : (
-          <Text style={styles.unfollowLabel}>Спри</Text>
+          <Text style={styles.unfollowLabel}>Отпиши се</Text>
         )}
       </Pressable>
-      <Ionicons name="chevron-forward" size={18} color={festivalUi.colors.secondary} />
     </Pressable>
   );
 }
@@ -100,17 +100,30 @@ export default function ProfileFollowingOrganizersScreen() {
 
   const handleUnfollow = useCallback(
     (item: FollowedOrganizerItem) => {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setUnfollowingIds((prev) => new Set(prev).add(item.organizerId));
-      unfollowMutation.mutate(item.organizerId, {
-        onSettled: () => {
-          setUnfollowingIds((prev) => {
-            const next = new Set(prev);
-            next.delete(item.organizerId);
-            return next;
-          });
-        },
-      });
+      Alert.alert(
+        'Отписване',
+        `Да спрем ли да следим „${item.name}"? Няма да получавате повече известия за техните фестивали.`,
+        [
+          { text: 'Отказ', style: 'cancel' },
+          {
+            text: 'Отпиши се',
+            style: 'destructive',
+            onPress: () => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setUnfollowingIds((prev) => new Set(prev).add(item.organizerId));
+              unfollowMutation.mutate(item.organizerId, {
+                onSettled: () => {
+                  setUnfollowingIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(item.organizerId);
+                    return next;
+                  });
+                },
+              });
+            },
+          },
+        ],
+      );
     },
     [unfollowMutation],
   );
@@ -285,17 +298,17 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
-    minWidth: 56,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FFFFFF',
+    minWidth: 88,
     alignItems: 'center',
   },
   unfollowBtnPressed: {
-    opacity: 0.7,
+    backgroundColor: '#FEF2F2',
   },
   unfollowLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: festivalUi.colors.secondary,
+    color: '#DC2626',
   },
 });
