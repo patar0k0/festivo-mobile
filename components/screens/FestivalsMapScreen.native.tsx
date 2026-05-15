@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -28,6 +29,23 @@ import { formatDateRangeRelative } from '@/lib/festival/relativeDate';
 
 const MAX_VISIBLE_POINTS = 90;
 const MAX_RAW_VIEWPORT = 200;
+
+type MapFilter = {
+  id: string;
+  label: string;
+  when?: 'this_week';
+  category?: string;
+};
+
+const MAP_FILTERS: MapFilter[] = [
+  { id: 'all', label: 'Всички' },
+  { id: 'this_week', label: 'Тази седмица', when: 'this_week' },
+  { id: 'music', label: '🎵 Музика', category: 'music' },
+  { id: 'culture', label: '🎭 Култура', category: 'culture' },
+  { id: 'food', label: '🍲 Храна', category: 'food' },
+  { id: 'family', label: '👨‍👩‍👧 Семейни', category: 'family' },
+  { id: 'crafts', label: '🧶 Занаяти', category: 'crafts' },
+];
 const REGION_DEBOUNCE_MS = 420;
 /** After custom Marker children mount on Android Google Maps, allow one paint cycle then stop tracking (avoids empty snapshots). */
 const ANDROID_MARKER_TRACK_VIEW_MS = 480;
@@ -184,16 +202,30 @@ export default function FestivalsMapScreen() {
   const [androidMapTracksViewChanges, setAndroidMapTracksViewChanges] = useState(
     () => Platform.OS === 'android',
   );
+  const [activeFilterId, setActiveFilterId] = useState<string>('all');
+  const activeFilter = useMemo(
+    () => MAP_FILTERS.find((f) => f.id === activeFilterId) ?? MAP_FILTERS[0]!,
+    [activeFilterId],
+  );
 
   const { data, isPending, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['festivals', 'map', 'trending'],
+    queryKey: ['festivals', 'map', 'trending', activeFilter.id],
     queryFn: () =>
       getFestivals({
         sort: 'trending',
         limit: 220,
+        when: activeFilter.when,
+        category: activeFilter.category,
       }),
     staleTime: 60_000,
   });
+
+  const onSelectFilter = useCallback((id: string) => {
+    void Haptics.selectionAsync();
+    setActiveFilterId(id);
+    setSelected(null);
+    void trackEvent({ event: 'map_interaction', source: 'filter_change', metadata: { filter: id } });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -547,14 +579,39 @@ export default function FestivalsMapScreen() {
         })}
       </MapView>
 
+      <View style={[styles.filterBar, { top: insets.top + 8 }]} pointerEvents="box-none">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}>
+          {MAP_FILTERS.map((f) => {
+            const isActive = f.id === activeFilterId;
+            return (
+              <Pressable
+                key={f.id}
+                onPress={() => onSelectFilter(f.id)}
+                style={({ pressed }) => [
+                  styles.filterChip,
+                  isActive && styles.filterChipActive,
+                  pressed && !isActive && styles.filterChipPressed,
+                ]}>
+                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                  {f.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       {searchAreaDirty ? (
         <PressableScale
           onPress={onSearchThisArea}
           pressedScale={0.96}
           pressedOpacity={0.88}
-          style={[styles.searchAreaBtn, { top: insets.top + 10 }]}
+          style={[styles.searchAreaBtn, { top: insets.top + 60 }]}
         >
-          <Text style={styles.searchAreaText}>Search this area</Text>
+          <Text style={styles.searchAreaText}>Търсене в тази област</Text>
         </PressableScale>
       ) : null}
 
@@ -571,7 +628,7 @@ export default function FestivalsMapScreen() {
       {isRefetching ? (
         <Reanimated.View
           entering={FadeIn.duration(160)}
-          style={[styles.refreshBadge, { top: insets.top + 8 }]}>
+          style={[styles.refreshBadge, { top: insets.top + 60 }]}>
           <ActivityIndicator size="small" color={festivalUi.colors.text} />
         </Reanimated.View>
       ) : null}
@@ -579,14 +636,14 @@ export default function FestivalsMapScreen() {
       {showNoMatchesCategory ? (
         <Reanimated.View
           entering={FadeIn.duration(220)}
-          style={[styles.emptyFloating, { top: insets.top + 10 }]}>
+          style={[styles.emptyFloating, { top: insets.top + 60 }]}>
           <Text style={styles.emptyTitle}>Няма фестивали за този филтър</Text>
           <Text style={styles.emptySub}>Избери „Всички“ или друга категория.</Text>
         </Reanimated.View>
       ) : showEmptyCoords ? (
         <Reanimated.View
           entering={FadeIn.duration(220)}
-          style={[styles.emptyFloating, { top: insets.top + 10 }]}>
+          style={[styles.emptyFloating, { top: insets.top + 60 }]}>
           <Text style={styles.emptyTitle}>Няма фестивали с координати</Text>
           <Text style={styles.emptySub}>Опитай по-късно или отвори списъка „Начало“.</Text>
         </Reanimated.View>
@@ -696,6 +753,48 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  filterBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+  },
+  filterScrollContent: {
+    paddingHorizontal: 12,
+    gap: 8,
+    flexDirection: 'row',
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    ...Platform.select({
+      android: { elevation: 2 },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+      },
+    }),
+  },
+  filterChipPressed: {
+    backgroundColor: '#F3F4F6',
+  },
+  filterChipActive: {
+    backgroundColor: '#4F46E5',
+    borderColor: '#4F46E5',
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: festivalUi.colors.text,
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
   },
   searchAreaBtn: {
     position: 'absolute',
