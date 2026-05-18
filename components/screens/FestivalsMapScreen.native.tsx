@@ -247,6 +247,10 @@ export default function FestivalsMapScreen() {
     void Haptics.selectionAsync();
     setActiveFilterId(id);
     setSelected(null);
+    // Animate to the whole-country view so the user sees every marker that
+    // matches the new chip, instead of being stuck on a tight initial zoom
+    // (user location or last-panned region).
+    mapRef.current?.animateToRegion(BULGARIA_REGION, 520);
     void trackEvent({ event: 'map_interaction', source: 'filter_change', metadata: { filter: id } });
   }, []);
 
@@ -553,8 +557,12 @@ export default function FestivalsMapScreen() {
     );
   }
 
-  const showEmptyCoords = devDiagnostics.fetched > 0 && devDiagnostics.validCoordCount === 0;
-  const showNoMatchesCategory = devDiagnostics.fetched === 0;
+  /** Don't render the empty banners while the query is still in flight or refreshing — otherwise
+   *  changing a filter chip flashes a misleading \"no festivals\" message during the brief fetch. */
+  const showEmptyCoords =
+    !isPending && !isRefetching && devDiagnostics.fetched > 0 && devDiagnostics.validCoordCount === 0;
+  const showNoMatchesCategory =
+    !isPending && !isRefetching && devDiagnostics.fetched === 0;
 
   return (
     <View style={styles.root}>
