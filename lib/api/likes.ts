@@ -1,4 +1,5 @@
 import { apiFetch } from './client';
+import { parseListItem, type FestivalListItem } from './festivals';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -71,4 +72,21 @@ export async function unlikeFestival(festivalId: string): Promise<ToggleLikedRes
   const body = await readJson(res);
   if (!res.ok) throw new Error(readErrorMessage(body, res.status));
   return parseToggleLikedResponse(body);
+}
+
+export async function getLikedFestivals(): Promise<FestivalListItem[]> {
+  const res = await apiFetch('/api/mobile/me/likes');
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(readErrorMessage(body, res.status));
+  const rec = asRecord(body);
+  const list = Array.isArray(body)
+    ? body
+    : Array.isArray(rec?.festivals)
+      ? rec.festivals
+      : Array.isArray(rec?.data)
+        ? rec.data
+        : [];
+  return list
+    .map((item) => parseListItem(item))
+    .filter((item): item is FestivalListItem => item != null);
 }
