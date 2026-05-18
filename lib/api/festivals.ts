@@ -85,6 +85,8 @@ export type FestivalDetail = {
   start_date: string;
   end_date?: string;
   saved: boolean;
+  liked: boolean;
+  likes_count: number;
   /** Cover / hero URL when API provides images */
   image_url?: string | null;
   /** Gallery URLs (detail payload `images[]`) */
@@ -524,6 +526,15 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
     if (flat.schedule_items.length) schedule_items = flat.schedule_items;
   }
 
+  const likesRaw = o.likes_count ?? o.likesCount;
+  let likes_count = 0;
+  if (typeof likesRaw === 'number' && Number.isFinite(likesRaw)) {
+    likes_count = Math.max(0, Math.floor(likesRaw));
+  } else if (typeof likesRaw === 'string' && likesRaw.trim()) {
+    const n = Number(likesRaw);
+    if (Number.isFinite(n)) likes_count = Math.max(0, Math.floor(n));
+  }
+
   return {
     festivalId,
     slug,
@@ -533,6 +544,8 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
     start_date,
     end_date,
     saved: Boolean(o.saved ?? o.is_saved ?? o.isSaved),
+    liked: Boolean(o.liked ?? o.is_liked ?? o.isLiked),
+    likes_count,
     image_url,
     gallery_urls: gallery_urls.length > 0 ? gallery_urls : undefined,
     organizer_name,
