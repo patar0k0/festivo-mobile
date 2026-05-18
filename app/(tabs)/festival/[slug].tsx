@@ -396,6 +396,13 @@ export default function FestivalDetailScreen() {
 
   const onToggleLike = useCallback(
     (festival: FestivalDetail) => {
+      if (__DEV__) {
+        console.log('[like] tap', {
+          slug: festival.slug,
+          liked: festival.liked,
+          likes_count: festival.likes_count,
+        });
+      }
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       toggleLikedMutation.mutate({
         festivalId: festival.festivalId,

@@ -326,7 +326,7 @@ function parseScheduleArrays(o: Record<string, unknown>): {
   };
 }
 
-function parseListItem(raw: unknown): FestivalListItem | null {
+export function parseListItem(raw: unknown): FestivalListItem | null {
   const o = asRecord(raw);
   if (!o) return null;
   const festivalId = String(o.festivalId ?? o.festival_id ?? o.id ?? '');
