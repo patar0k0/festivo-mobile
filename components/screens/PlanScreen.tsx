@@ -1,10 +1,13 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useQueries } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
+  Alert,
   LayoutAnimation,
   Platform,
   Pressable,
@@ -374,6 +377,20 @@ type PlannedFestivalRowProps = {
   onPressRemove: () => void;
 };
 
+const BG_MONTHS_SHORT = ['ян', 'фев', 'март', 'апр', 'май', 'юни', 'юли', 'авг', 'сеп', 'окт', 'ное', 'дек'];
+
+function formatEditorialDate(start: string, end?: string): string {
+  const s = new Date(start);
+  if (Number.isNaN(s.getTime())) return start;
+  const d = `${s.getDate()} ${BG_MONTHS_SHORT[s.getMonth()]}`;
+  if (!end?.trim()) return d;
+  const e = new Date(end);
+  if (Number.isNaN(e.getTime())) return d;
+  if (s.toDateString() === e.toDateString()) return d;
+  if (s.getMonth() === e.getMonth()) return `${s.getDate()}–${e.getDate()} ${BG_MONTHS_SHORT[e.getMonth()]}`;
+  return `${d} – ${e.getDate()} ${BG_MONTHS_SHORT[e.getMonth()]}`;
+}
+
 function PlannedFestivalRow({
   item,
   reminder,
@@ -388,100 +405,164 @@ function PlannedFestivalRow({
   onPressOrganizer,
   onPressRemove,
 }: PlannedFestivalRowProps) {
-  const dateLabel = getRelativeDateLabel(item.start_date);
+  const dateLabel = formatEditorialDate(item.start_date, item.end_date);
   const startsIn = getStartsInLabelBg(item.start_date);
   const thumbUri = item.image_url ?? undefined;
   const reminderActive = reminder !== 'none';
+  const organizerName = item.organizer?.name?.trim() || item.organizer_name?.trim() || null;
+
+  const onPressMore = () => {
+    Alert.alert(
+      item.title,
+      undefined,
+      [
+        { text: 'Карта', onPress: onPressMap },
+        { text: reminderActive ? 'Промени напомнянето' : 'Добави напомняне', onPress: onPressReminder },
+        { text: removing ? 'Премахва…' : 'Премахни от плана', style: 'destructive', onPress: onPressRemove },
+        { text: 'Откажи', style: 'cancel' },
+      ],
+      { cancelable: true },
+    );
+  };
+
   return (
     <Pressable
       onPress={onPressCard}
-      style={({ pressed }) => [styles.rowCard, pressed && styles.rowCardPressed]}>
-      <View style={styles.rowMain}>
-        <View style={styles.rowThumbWrap}>
-          {thumbUri ? (
-            <ExpoImage
-              source={{ uri: thumbUri }}
-              style={styles.rowThumb}
-              contentFit="cover"
-              transition={180}
-              cachePolicy="memory-disk"
-            />
-          ) : (
-            <View style={styles.rowThumbPlaceholder}>
-              <Text style={styles.rowThumbEmoji}>🎉</Text>
+      style={({ pressed }) => [styles.editorialCard, pressed && styles.editorialCardPressed]}>
+      {/* Hero */}
+      <View style={styles.editorialHero}>
+        {thumbUri ? (
+          <ExpoImage
+            source={{ uri: thumbUri }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={220}
+            cachePolicy="memory-disk"
+          />
+        ) : (
+          <LinearGradient
+            pointerEvents="none"
+            colors={['#F87171', '#B91C1C']}
+            style={StyleSheet.absoluteFill}>
+            <View style={styles.editorialHeroPlaceholderInner}>
+              <Text style={styles.editorialHeroPlaceholderEmoji}>🎉</Text>
             </View>
-          )}
+          </LinearGradient>
+        )}
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.78)']}
+          locations={[0.45, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+
+        {/* Top overlay */}
+        <View pointerEvents="none" style={styles.editorialTopOverlay}>
+          <View style={styles.editorialDatePill}>
+            <Ionicons name="calendar" size={12} color="#FFFFFF" />
+            <Text style={styles.editorialDatePillText}>{dateLabel}</Text>
+            {startsIn ? <Text style={styles.editorialDatePillSub}>· {startsIn}</Text> : null}
+          </View>
+          <View style={styles.editorialSavedBadge}>
+            <AnimatedBookmark filled size={14} color="#FFFFFF" />
+          </View>
         </View>
-        <View style={styles.rowBody}>
-          <Text style={styles.rowTitle} numberOfLines={2}>
+
+        {/* Bottom overlay */}
+        <View pointerEvents="none" style={styles.editorialBottomOverlay}>
+          <Text style={styles.editorialHeroTitle} numberOfLines={2}>
             {item.title}
           </Text>
-          <Text style={styles.rowMeta} numberOfLines={1}>
-            {(item.city || 'България') + ' · ' + dateLabel}
-          </Text>
-          {startsIn ? (
-            <Text style={styles.rowSub} numberOfLines={1}>
-              {startsIn}
+          <View style={styles.editorialCityRow}>
+            <Ionicons name="location" size={12} color="rgba(255,255,255,0.92)" />
+            <Text style={styles.editorialCityText} numberOfLines={1}>
+              {item.city || 'България'}
             </Text>
-          ) : null}
-        </View>
-        <View pointerEvents="none" style={styles.rowSavedIcon}>
-          <AnimatedBookmark filled size={18} color={festivalUi.colors.text} />
+          </View>
         </View>
       </View>
 
-      {plannedItemCount > 0 ? (
-        <Pressable
-          onPress={onPressProgram}
-          style={({ pressed }) => [styles.rowProgramChip, pressed && styles.rowProgramChipPressed]}>
-          <Text style={styles.rowProgramChipText}>
-            {plannedItemCount === 1 ? '1 точка от програмата' : `${plannedItemCount} точки от програмата`}
-          </Text>
-          <Text style={styles.rowProgramChipArrow}>›</Text>
-        </Pressable>
-      ) : null}
+      {/* Content section */}
+      <View style={styles.editorialBody}>
+        {organizerName ? (
+          <Pressable
+            onPress={hasOrganizer ? onPressOrganizer : undefined}
+            disabled={!hasOrganizer}
+            style={({ pressed }) => [
+              styles.editorialMetaRow,
+              hasOrganizer && pressed ? styles.editorialMetaRowPressed : null,
+            ]}>
+            <View style={styles.editorialMetaIcon}>
+              <Ionicons name="person" size={13} color="#4F46E5" />
+            </View>
+            <Text style={styles.editorialMetaText} numberOfLines={1}>
+              {organizerName}
+            </Text>
+            {hasOrganizer ? (
+              <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+            ) : null}
+          </Pressable>
+        ) : null}
 
-      <View style={styles.rowActions}>
         <Pressable
           onPress={onPressReminder}
           style={({ pressed }) => [
-            styles.rowReminderChip,
-            reminderActive && styles.rowReminderChipActive,
-            pressed && styles.rowChipPressed,
+            styles.editorialMetaRow,
+            pressed ? styles.editorialMetaRowPressed : null,
           ]}>
-          <Text style={styles.rowReminderEmoji}>{reminderActive ? '🔔' : '🔕'}</Text>
+          <View style={[styles.editorialMetaIcon, reminderActive && styles.editorialMetaIconActive]}>
+            <Ionicons
+              name={reminderActive ? 'notifications' : 'notifications-outline'}
+              size={13}
+              color={reminderActive ? '#D97706' : '#9CA3AF'}
+            />
+          </View>
           <Text
-            style={[styles.rowReminderText, reminderActive && styles.rowReminderTextActive]}
+            style={[
+              styles.editorialMetaText,
+              !reminderActive && styles.editorialMetaTextMuted,
+            ]}
             numberOfLines={1}>
-            {reminderLabel}
+            {reminderActive ? reminderLabel : 'Без напомняне'}
           </Text>
+          <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
         </Pressable>
-        <Pressable
-          onPress={onPressMap}
-          hitSlop={6}
-          style={({ pressed }) => [styles.rowIconBtn, pressed && styles.rowChipPressed]}>
-          <Text style={styles.rowIconBtnEmoji}>📍</Text>
-        </Pressable>
-        {hasOrganizer ? (
+
+        <View style={styles.editorialActions}>
+          {plannedItemCount > 0 ? (
+            <Pressable
+              onPress={onPressProgram}
+              style={({ pressed }) => [
+                styles.editorialPrimaryCta,
+                pressed && styles.editorialPrimaryCtaPressed,
+              ]}>
+              <Ionicons name="list" size={15} color="#FFFFFF" />
+              <Text style={styles.editorialPrimaryCtaText}>
+                {plannedItemCount === 1 ? '1 точка' : `${plannedItemCount} точки`} · Програма
+              </Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={onPressProgram}
+              style={({ pressed }) => [
+                styles.editorialSecondaryCta,
+                pressed && styles.editorialSecondaryCtaPressed,
+              ]}>
+              <Ionicons name="list-outline" size={15} color={festivalUi.colors.text} />
+              <Text style={styles.editorialSecondaryCtaText}>Виж програмата</Text>
+            </Pressable>
+          )}
           <Pressable
-            onPress={onPressOrganizer}
-            hitSlop={6}
-            style={({ pressed }) => [styles.rowIconBtn, pressed && styles.rowChipPressed]}>
-            <Text style={styles.rowIconBtnEmoji}>👤</Text>
+            onPress={onPressMore}
+            hitSlop={8}
+            style={({ pressed }) => [styles.editorialIconBtn, pressed && styles.editorialIconBtnPressed]}>
+            {removing ? (
+              <ActivityIndicator size="small" color="#6B7280" />
+            ) : (
+              <Ionicons name="ellipsis-horizontal" size={18} color="#6B7280" />
+            )}
           </Pressable>
-        ) : null}
-        <View style={{ flex: 1 }} />
-        <Pressable
-          onPress={onPressRemove}
-          disabled={removing}
-          hitSlop={6}
-          style={({ pressed }) => [
-            styles.rowRemoveLink,
-            removing && styles.rowRemoveLinkDisabled,
-            pressed && styles.rowChipPressed,
-          ]}>
-          <Text style={styles.rowRemoveText}>{removing ? 'Премахва…' : 'Премахни'}</Text>
-        </Pressable>
+        </View>
       </View>
     </Pressable>
   );
@@ -750,7 +831,12 @@ export default function PlanScreen() {
       {(['this_weekend', 'this_week', 'upcoming', 'later'] as const).map((key) =>
         grouped[key].length ? (
           <View key={key} style={styles.section}>
-            <Text style={styles.sectionTitle}>{GROUP_TITLES[key]}</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>{GROUP_TITLES[key]}</Text>
+              <View style={styles.sectionCountBadge}>
+                <Text style={styles.sectionCountText}>{grouped[key].length}</Text>
+              </View>
+            </View>
             {grouped[key].map((item) => {
               const reminder = planQuery.reminders[item.festivalId]?.type ?? 'default';
               const plannedItemCount = itemCountsByFestival[item.festivalId] ?? 0;
@@ -983,8 +1069,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: festivalUi.colors.secondary,
   },
-  section: { marginTop: 8 },
-  sectionTitle: { fontSize: 19, fontWeight: '800', color: festivalUi.colors.text, marginBottom: 8 },
+  section: { marginTop: 16, gap: 12 },
+  sectionTitle: { fontSize: 19, fontWeight: '800', color: festivalUi.colors.text, marginBottom: 8, letterSpacing: -0.3 },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  sectionCountBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
+    marginBottom: 6,
+  },
+  sectionCountText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
   cardWrap: { marginBottom: 12 },
   itemCountChip: {
     alignSelf: 'flex-start',
@@ -1307,4 +1411,185 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#B91C1C',
   },
+  /* ── Editorial card ─────────────────────────────────────────── */
+  editorialCard: {
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  editorialCardPressed: { opacity: 0.96 },
+  editorialHero: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#E5E7EB',
+  },
+  editorialHeroPlaceholderInner: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editorialHeroPlaceholderEmoji: { fontSize: 56 },
+  editorialTopOverlay: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  editorialDatePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(15,23,42,0.62)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  editorialDatePillText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.1,
+  },
+  editorialDatePillSub: {
+    color: 'rgba(255,255,255,0.78)',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 2,
+  },
+  editorialSavedBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15,23,42,0.62)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  editorialBottomOverlay: {
+    position: 'absolute',
+    bottom: 12,
+    left: 14,
+    right: 14,
+  },
+  editorialHeroTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 22,
+    letterSpacing: -0.2,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  editorialCityRow: {
+    marginTop: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  editorialCityText: {
+    color: 'rgba(255,255,255,0.94)',
+    fontSize: 12.5,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  editorialBody: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 12,
+    gap: 4,
+  },
+  editorialMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  editorialMetaRowPressed: { opacity: 0.7 },
+  editorialMetaIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EEF2FF',
+  },
+  editorialMetaIconActive: {
+    backgroundColor: '#FEF3C7',
+  },
+  editorialMetaText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: festivalUi.colors.text,
+  },
+  editorialMetaTextMuted: {
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  editorialActions: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editorialPrimaryCta: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#0F172A',
+  },
+  editorialPrimaryCtaPressed: { opacity: 0.88 },
+  editorialPrimaryCtaText: {
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  editorialSecondaryCta: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+  },
+  editorialSecondaryCtaPressed: { opacity: 0.85 },
+  editorialSecondaryCtaText: {
+    color: festivalUi.colors.text,
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  editorialIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  editorialIconBtnPressed: { opacity: 0.7 },
 });
