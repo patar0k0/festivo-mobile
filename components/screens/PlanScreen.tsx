@@ -18,6 +18,7 @@ import {
   UIManager,
   View,
 } from 'react-native';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ReminderBottomSheet } from '@/components/plan/ReminderBottomSheet';
@@ -145,7 +146,11 @@ function buildNextReminderPreview(festivals: FestivalListItem[], reminders: Reco
     })[0];
   if (!next) return 'Няма активно напомняне за предстоящ фестивал.';
   const type = reminders[next.festivalId]?.type ?? 'default';
-  return `${next.title}: ${REMINDER_EXPLANATIONS[type]}.`;
+  // The festival title is shown right below as a card — repeating it here
+  // doubles the same text. Keep this preview purely about the reminder
+  // schedule and the relative date.
+  const startsIn = getStartsInLabelBg(next.start_date);
+  return `Следващо напомняне — ${REMINDER_EXPLANATIONS[type]} · ${startsIn.toLowerCase()}.`;
 }
 
 function scheduleSortTime(raw: string): number {
@@ -385,14 +390,38 @@ function PlannerCalendar({
   );
 }
 
-function StatTile({ value, label }: { value: number; label: string }) {
+type StatTone = 'indigo' | 'amber' | 'emerald';
+
+function StatTile({
+  value,
+  label,
+  icon,
+  tone,
+  delay = 0,
+}: {
+  value: number;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  tone: StatTone;
+  delay?: number;
+}) {
+  const palette = STAT_TONE_PALETTE[tone];
   return (
-    <View style={styles.statTile}>
-      <AnimatedCount style={styles.statTileValue} value={String(value)} />
+    <Reanimated.View entering={FadeInDown.duration(360).delay(delay).springify().damping(16)} style={styles.statTile}>
+      <View style={[styles.statIconBubble, { backgroundColor: palette.bubble }]}>
+        <Ionicons name={icon} size={16} color={palette.icon} />
+      </View>
+      <AnimatedCount style={[styles.statTileValue, { color: palette.text }]} value={String(value)} />
       <Text style={styles.statTileLabel}>{label}</Text>
-    </View>
+    </Reanimated.View>
   );
 }
+
+const STAT_TONE_PALETTE: Record<StatTone, { bubble: string; icon: string; text: string }> = {
+  indigo: { bubble: '#EEF2FF', icon: '#4F46E5', text: '#0F172A' },
+  amber: { bubble: '#FEF3C7', icon: '#D97706', text: '#0F172A' },
+  emerald: { bubble: '#D1FAE5', icon: '#059669', text: '#0F172A' },
+};
 
 type PlannedFestivalRowProps = {
   item: FestivalListItem;
@@ -802,11 +831,29 @@ export default function PlanScreen() {
       <View style={styles.statsCard}>
         <Text style={styles.statsTitle}>Моят план</Text>
         <View style={styles.statTilesRow}>
-          <StatTile value={planQuery.stats.savedFestivalCount} label="В плана" />
+          <StatTile
+            value={planQuery.stats.savedFestivalCount}
+            label="В плана"
+            icon="bookmark"
+            tone="indigo"
+            delay={0}
+          />
           <View style={styles.statTilesDivider} />
-          <StatTile value={planQuery.stats.plannedItemCount} label="Точки" />
+          <StatTile
+            value={planQuery.stats.plannedItemCount}
+            label="Точки"
+            icon="checkmark-circle"
+            tone="amber"
+            delay={60}
+          />
           <View style={styles.statTilesDivider} />
-          <StatTile value={planQuery.stats.upcomingCount} label="Предстоящи" />
+          <StatTile
+            value={planQuery.stats.upcomingCount}
+            label="Предстоящи"
+            icon="time"
+            tone="emerald"
+            delay={120}
+          />
         </View>
         <View style={styles.reminderPreviewLine}>
           <Text style={styles.reminderPreviewLineIcon}>⏰</Text>
@@ -1020,15 +1067,24 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: 4,
+    gap: 4,
+  },
+  statIconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
   statTileValue: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '900',
     color: festivalUi.colors.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   statTileLabel: {
-    marginTop: 2,
+    marginTop: 1,
     fontSize: 11,
     fontWeight: '700',
     color: festivalUi.colors.secondary,
