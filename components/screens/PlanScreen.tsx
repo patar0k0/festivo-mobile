@@ -779,9 +779,15 @@ export default function PlanScreen() {
                     }}
                     onPressReminder={() => openReminderPicker(item.festivalId)}
                     onPressMap={() => router.push('/(tabs)/map')}
-                    onPressOrganizer={() =>
-                      router.push(`/search?q=${encodeURIComponent(item.organizer_name ?? '')}`)
-                    }
+                    onPressOrganizer={() => {
+                      const orgSlug = item.organizer?.slug?.trim();
+                      if (orgSlug) {
+                        router.push(`/organizer/${orgSlug}`);
+                      } else if (item.organizer_name) {
+                        // No slug in payload — fall back to a search prefilled with the name.
+                        router.push(`/search?q=${encodeURIComponent(item.organizer_name)}`);
+                      }
+                    }}
                     onPressRemove={onRemove}
                   />
                 </View>

@@ -31,6 +31,8 @@ export type FestivalListItem = {
   /** Optional listing fields for client-side search ranking when API provides them. */
   saves_count?: number;
   organizer_name?: string;
+  /** Primary organizer summary — present when API can resolve a slug/name. */
+  organizer?: { slug?: string | null; name?: string | null } | null;
   category?: string;
   categories?: string[];
   tags?: string[];
@@ -397,6 +399,14 @@ export function parseListItem(raw: unknown): FestivalListItem | null {
     saved: Boolean(o.saved ?? o.is_saved ?? o.isSaved),
     saves_count,
     organizer_name,
+    organizer: (() => {
+      const orgRec = asRecord(o.organizer);
+      if (!orgRec) return undefined;
+      const oslug = typeof orgRec.slug === 'string' && orgRec.slug.trim() ? orgRec.slug.trim() : null;
+      const oname = typeof orgRec.name === 'string' && orgRec.name.trim() ? orgRec.name.trim() : null;
+      if (!oslug && !oname) return undefined;
+      return { slug: oslug, name: oname };
+    })(),
     category,
     categories,
     tags,
