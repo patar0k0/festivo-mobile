@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -32,7 +32,7 @@ import {
   type FestivalScheduleItem,
 } from '@/lib/api/festivals';
 import type { SavedFestivalBasicDto } from '@/lib/api/mobilePlan';
-import { type MobilePlanReminderType } from '@/lib/api/mobilePlan';
+import { toggleScheduleItemInPlan, type MobilePlanReminderType } from '@/lib/api/mobilePlan';
 import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { formatScheduleTime, getFestivalScheduleTimeZone, groupFestivalSchedule } from '@/lib/plan/schedule';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
@@ -243,6 +243,9 @@ function PlannerCalendar({
   onPressEntry,
   loading,
   hasSavedItems,
+  orphanedCount,
+  onCleanupOrphans,
+  cleaningUp,
 }: {
   groups: { date: string; entries: PlannedScheduleEntry[] }[];
   onPressEntry: (entry: PlannedScheduleEntry) => void;
@@ -250,19 +253,48 @@ function PlannerCalendar({
   loading: boolean;
   /** True when the plan state says the user has at least one schedule item saved on the server. */
   hasSavedItems: boolean;
+  /** Saved schedule_item_ids that no longer appear in any hydrated festival schedule. */
+  orphanedCount: number;
+  onCleanupOrphans: () => void;
+  cleaningUp: boolean;
 }) {
   const ymdToday = todayYmdLocal();
   if (!groups.length) {
-    // Three distinct empty cases:
-    // - Plan has saved items, details still loading → temporary spinner copy.
-    // - Plan has saved items, details loaded but no matching schedule item id
-    //   in the detail's schedule (data drift / stale cache).
-    // - Plan has nothing saved → onboarding copy.
     if (loading && hasSavedItems) {
       return (
         <View style={styles.emptyCalendar}>
           <ActivityIndicator size="small" color={festivalUi.colors.text} />
           <Text style={[styles.emptyCalendarText, { marginTop: 10 }]}>Зарежда се програмата…</Text>
+        </View>
+      );
+    }
+    // Every saved id is orphaned in the live program (organizer recreated items,
+    // leaving "Точки: N" stuck without a row to render). Offer a cleanup CTA.
+    if (hasSavedItems && orphanedCount > 0) {
+      return (
+        <View style={styles.emptyCalendar}>
+          <Text style={styles.emptyCalendarTitle}>Точките вече не са в програмата</Text>
+          <Text style={styles.emptyCalendarText}>
+            {orphanedCount === 1
+              ? '1 точка, която беше в плана ти, е премахната от организатора. Изчисти я, за да обновиш броячите.'
+              : `${orphanedCount} точки, които бяха в плана ти, са премахнати от организатора. Изчисти ги, за да обновиш броячите.`}
+          </Text>
+          <Pressable
+            onPress={onCleanupOrphans}
+            disabled={cleaningUp}
+            style={({ pressed }) => [
+              styles.emptyCleanupBtn,
+              pressed && !cleaningUp && styles.emptyCleanupBtnPressed,
+              cleaningUp && styles.emptyCleanupBtnDisabled,
+            ]}>
+            {cleaningUp ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.emptyCleanupBtnText}>
+                Изчисти {orphanedCount} {orphanedCount === 1 ? 'точка' : 'точки'}
+              </Text>
+            )}
+          </Pressable>
         </View>
       );
     }
@@ -573,10 +605,12 @@ export default function PlanScreen() {
   const insets = useSafeAreaInsets();
   const planQuery = useMobilePlanState();
   const togglePlanMutation = useTogglePlanFestivalMutation();
+  const queryClient = useQueryClient();
   const [pastExpanded, setPastExpanded] = useState(false);
   const [pickerFestivalId, setPickerFestivalId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<PlanViewMode>('festivals');
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
+  const [cleaningOrphans, setCleaningOrphans] = useState(false);
 
   const reminderMutation = useUpdatePlanReminderMutation();
 
@@ -625,6 +659,41 @@ export default function PlanScreen() {
     () => buildPlannedScheduleEntries(hydratedDetails, planQuery.savedScheduleItemIds),
     [hydratedDetails, planQuery.savedScheduleItemIds],
   );
+
+  /**
+   * Saved schedule_item_ids that no longer match any item in the live festival
+   * details — orphans from an organizer editing/recreating the program. Only
+   * trust this list after every detail query has settled, otherwise an
+   * in-flight fetch would look like a missing item and we'd offer to wipe
+   * legitimate plan rows.
+   */
+  const orphanedScheduleItemIds = useMemo(() => {
+    if (planQuery.savedScheduleItemIds.length === 0) return [] as string[];
+    const anyLoading = plannedDetailQueries.some((q) => q.isPending || q.isFetching);
+    if (anyLoading) return [] as string[];
+    const liveIds = new Set(hydratedDetails.flatMap((d) => (d.schedule_items ?? []).map((i) => i.id)));
+    return planQuery.savedScheduleItemIds.filter((id) => !liveIds.has(id));
+  }, [hydratedDetails, plannedDetailQueries, planQuery.savedScheduleItemIds]);
+
+  const handleCleanupOrphans = async () => {
+    if (cleaningOrphans || orphanedScheduleItemIds.length === 0) return;
+    setCleaningOrphans(true);
+    try {
+      // POST /api/plan/items toggles — calling on an existing id deletes the
+      // row, so we issue one call per orphan id. Sequential is fine; orphans
+      // are usually a handful at most.
+      for (const id of orphanedScheduleItemIds) {
+        try {
+          await toggleScheduleItemInPlan(id);
+        } catch (err) {
+          if (__DEV__) console.warn('[plan][cleanup orphan failed]', { id, err });
+        }
+      }
+      await queryClient.invalidateQueries({ queryKey: ['mobilePlanState'] });
+    } finally {
+      setCleaningOrphans(false);
+    }
+  };
 
   // Diagnose the "Точки: N but Календар is empty" mismatch.
   // Most common cause: the schedule item ids on the server's plan-state
@@ -824,6 +893,9 @@ export default function PlanScreen() {
           groups={calendarGroups}
           loading={plannedDetailQueries.some((q) => q.isPending || q.isFetching)}
           hasSavedItems={planQuery.savedScheduleItemIds.length > 0}
+          orphanedCount={orphanedScheduleItemIds.length}
+          onCleanupOrphans={() => void handleCleanupOrphans()}
+          cleaningUp={cleaningOrphans}
           onPressEntry={(entry) => router.push(festivalDetailHref(entry.festivalSlug))}
         />
       ) : (
@@ -1124,6 +1196,23 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: festivalUi.colors.secondary,
     textAlign: 'center',
+  },
+  emptyCleanupBtn: {
+    marginTop: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#0F172A',
+    minWidth: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCleanupBtnPressed: { opacity: 0.85 },
+  emptyCleanupBtnDisabled: { opacity: 0.55 },
+  emptyCleanupBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
   calendarWrap: {
     gap: 12,
