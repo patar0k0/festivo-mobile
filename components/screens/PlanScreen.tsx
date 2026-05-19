@@ -509,8 +509,9 @@ export default function PlanScreen() {
       end_date: f.end_date ?? '',
       image_url: f.image_url,
       saved: true,
-      organizer_name: f.organizer_name,
-      category: f.category,
+      organizer_name: f.organizer_name ?? undefined,
+      organizer: f.organizer,
+      category: f.category ?? undefined,
       is_verified: f.is_verified,
       is_promoted: false,
     }));
