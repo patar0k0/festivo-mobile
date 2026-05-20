@@ -160,7 +160,7 @@ export async function removeFestivalFromPlan(
 export async function toggleScheduleItemInPlan(
   scheduleItemId: string,
 ): Promise<{ ok: boolean; inPlan: boolean; scheduleItemId: string }> {
-  const body = await requestMobilePlan<unknown>('/api/plan/items', {
+  const body = await requestMobilePlan<unknown>('/api/mobile/plan/items', {
     method: 'POST',
     body: { scheduleItemId },
   });
