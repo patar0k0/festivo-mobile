@@ -103,6 +103,12 @@ function toSavedFestivalBasicDto(
     category: festival.category ?? null,
     is_verified: Boolean(festival.is_verified),
     organizer_name: festival.organizer_name ?? null,
+    organizer: festival.organizer
+      ? {
+          slug: festival.organizer.slug ?? null,
+          name: festival.organizer.name ?? null,
+        }
+      : null,
   };
 }
 

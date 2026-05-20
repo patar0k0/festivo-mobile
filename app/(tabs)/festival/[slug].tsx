@@ -30,6 +30,7 @@ import { FestivalMapPreview } from '@/components/festival/FestivalMapPreview';
 import { FestivalScheduleSectionList } from '@/components/festival/FestivalScheduleSectionList';
 import { VerifiedBadge } from '@/components/organizer/VerifiedBadge';
 import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
+import { AnimatedHeart } from '@/components/ui/AnimatedHeart';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { Skeleton, skeletonRadii, skeletonRhythm } from '@/components/ui/Skeleton';
 import { festivalUi, OutlinedActionButton } from '@/components/ui/FestivalCard';
@@ -44,6 +45,7 @@ import { trackRecentlyViewedFestival } from '@/lib/personalization/recentlyViewe
 import { groupFestivalSchedule } from '@/lib/plan/schedule';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 import { useTogglePlanScheduleItemMutation } from '@/lib/query/useTogglePlanScheduleItemMutation';
+import { useToggleLikedMutation } from '@/lib/query/useToggleLikedMutation';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
 import { getFestivalIcsUrl, getFestivalPublicUrl } from '@/lib/site';
 
@@ -263,6 +265,7 @@ export default function FestivalDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const toggleSavedMutation = useToggleSavedMutation();
+  const toggleLikedMutation = useToggleLikedMutation();
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [galleryVisible, setGalleryVisible] = useState(false);
@@ -390,6 +393,24 @@ export default function FestivalDetailScreen() {
       galleryFade.setValue(0);
     });
   }, [galleryFade]);
+
+  const onToggleLike = useCallback(
+    (festival: FestivalDetail) => {
+      if (__DEV__) {
+        console.log('[like] tap', {
+          slug: festival.slug,
+          liked: festival.liked,
+          likes_count: festival.likes_count,
+        });
+      }
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      toggleLikedMutation.mutate({
+        festivalId: festival.festivalId,
+        slug: festival.slug,
+      });
+    },
+    [toggleLikedMutation],
+  );
 
   const onToggleSave = useCallback(
     (festival: FestivalDetail) => {
@@ -584,19 +605,25 @@ export default function FestivalDetailScreen() {
           </View>
           <Pressable
             style={[styles.heroHeart, { top: insets.top + 10 }]}
-            onPress={() => onToggleSave(data)}
-            disabled={isSaving}
+            onPress={() => onToggleLike(data)}
+            disabled={toggleLikedMutation.isPending}
             hitSlop={12}
             accessibilityRole="button"
-            accessibilityLabel={planQuery.isSaved(data.festivalId) ? 'Премахни от харесани' : 'Харесай'}>
-            {isSaving ? (
+            accessibilityLabel={data.liked ? 'Премахни харесването' : 'Харесай'}>
+            {toggleLikedMutation.isPending ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Ionicons
-                name={planQuery.isSaved(data.festivalId) ? 'heart' : 'heart-outline'}
-                size={24}
-                color="#FFFFFF"
-              />
+              <View style={styles.heroHeartInner}>
+                <AnimatedHeart
+                  filled={data.liked}
+                  size={24}
+                  color="#EF4444"
+                  outlineColor="#FFFFFF"
+                />
+                {data.likes_count > 0 ? (
+                  <Text style={styles.heroHeartCount}>{data.likes_count}</Text>
+                ) : null}
+              </View>
             )}
           </Pressable>
         </Reanimated.View>
@@ -857,12 +884,24 @@ const styles = StyleSheet.create({
   heroHeart: {
     position: 'absolute',
     right: 14,
-    width: 44,
+    minWidth: 44,
     height: 44,
+    paddingHorizontal: 10,
     borderRadius: 22,
     backgroundColor: 'rgba(0,0,0,0.38)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  heroHeartInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroHeartCount: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.1,
   },
   heroTitle: {
     color: '#FFFFFF',

@@ -34,18 +34,31 @@ type MapFilter = {
   id: string;
   label: string;
   when?: 'this_week';
-  category?: string;
+  /**
+   * Substring(s) matched case-insensitively against the festival's
+   * `category` field on the client. The DB stores Bulgarian free-form
+   * category text ("Фолклорен фестивал", "Кулинарно-фолклорен", "Винен
+   * фестивал", ...), so an exact-slug server filter would always be
+   * empty. Match the substring locally instead.
+   */
+  categoryMatches?: string[];
 };
 
 const MAP_FILTERS: MapFilter[] = [
   { id: 'all', label: 'Всички' },
   { id: 'this_week', label: 'Тази седмица', when: 'this_week' },
-  { id: 'music', label: '🎵 Музика', category: 'music' },
-  { id: 'culture', label: '🎭 Култура', category: 'culture' },
-  { id: 'food', label: '🍲 Храна', category: 'food' },
-  { id: 'family', label: '👨‍👩‍👧 Семейни', category: 'family' },
-  { id: 'crafts', label: '🧶 Занаяти', category: 'crafts' },
+  { id: 'folk', label: '🎭 Фолклор', categoryMatches: ['фолклор'] },
+  { id: 'sabor', label: '🎉 Събори', categoryMatches: ['събор'] },
+  { id: 'culinary', label: '🍲 Кулинарни', categoryMatches: ['кулинар', 'храна'] },
+  { id: 'wine', label: '🍷 Винени', categoryMatches: ['вин'] },
+  { id: 'traditional', label: '🏛 Традиции', categoryMatches: ['традиц'] },
 ];
+
+function categoryMatchesFilter(category: string | undefined, matches: string[]): boolean {
+  if (!category) return false;
+  const lc = category.toLowerCase();
+  return matches.some((m) => lc.includes(m));
+}
 const REGION_DEBOUNCE_MS = 420;
 /** After custom Marker children mount on Android Google Maps, allow one paint cycle then stop tracking (avoids empty snapshots). */
 const ANDROID_MARKER_TRACK_VIEW_MS = 480;
@@ -208,22 +221,36 @@ export default function FestivalsMapScreen() {
     [activeFilterId],
   );
 
-  const { data, isPending, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['festivals', 'map', 'trending', activeFilter.id],
+  /**
+   * Fetch a wide pool keyed only on `when` (server-side temporal filter).
+   * Category chips are matched client-side because the DB `category` field
+   * is free-form Bulgarian text — see `MAP_FILTERS.categoryMatches`.
+   */
+  const { data: rawData, isPending, isError, refetch, isRefetching } = useQuery({
+    queryKey: ['festivals', 'map', 'trending', activeFilter.when ?? 'all'],
     queryFn: () =>
       getFestivals({
         sort: 'trending',
         limit: 220,
         when: activeFilter.when,
-        category: activeFilter.category,
       }),
     staleTime: 60_000,
   });
+
+  const data = useMemo(() => {
+    const list = rawData ?? [];
+    if (!activeFilter.categoryMatches) return list;
+    return list.filter((item) => categoryMatchesFilter(item.category, activeFilter.categoryMatches!));
+  }, [activeFilter.categoryMatches, rawData]);
 
   const onSelectFilter = useCallback((id: string) => {
     void Haptics.selectionAsync();
     setActiveFilterId(id);
     setSelected(null);
+    // Animate to the whole-country view so the user sees every marker that
+    // matches the new chip, instead of being stuck on a tight initial zoom
+    // (user location or last-panned region).
+    mapRef.current?.animateToRegion(BULGARIA_REGION, 520);
     void trackEvent({ event: 'map_interaction', source: 'filter_change', metadata: { filter: id } });
   }, []);
 
@@ -530,8 +557,12 @@ export default function FestivalsMapScreen() {
     );
   }
 
-  const showEmptyCoords = devDiagnostics.fetched > 0 && devDiagnostics.validCoordCount === 0;
-  const showNoMatchesCategory = devDiagnostics.fetched === 0;
+  /** Don't render the empty banners while the query is still in flight or refreshing — otherwise
+   *  changing a filter chip flashes a misleading \"no festivals\" message during the brief fetch. */
+  const showEmptyCoords =
+    !isPending && !isRefetching && devDiagnostics.fetched > 0 && devDiagnostics.validCoordCount === 0;
+  const showNoMatchesCategory =
+    !isPending && !isRefetching && devDiagnostics.fetched === 0;
 
   return (
     <View style={styles.root}>

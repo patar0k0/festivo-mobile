@@ -31,6 +31,8 @@ export type FestivalListItem = {
   /** Optional listing fields for client-side search ranking when API provides them. */
   saves_count?: number;
   organizer_name?: string;
+  /** Primary organizer summary — present when API can resolve a slug/name. */
+  organizer?: { slug?: string | null; name?: string | null } | null;
   category?: string;
   categories?: string[];
   tags?: string[];
@@ -85,6 +87,8 @@ export type FestivalDetail = {
   start_date: string;
   end_date?: string;
   saved: boolean;
+  liked: boolean;
+  likes_count: number;
   /** Cover / hero URL when API provides images */
   image_url?: string | null;
   /** Gallery URLs (detail payload `images[]`) */
@@ -324,7 +328,7 @@ function parseScheduleArrays(o: Record<string, unknown>): {
   };
 }
 
-function parseListItem(raw: unknown): FestivalListItem | null {
+export function parseListItem(raw: unknown): FestivalListItem | null {
   const o = asRecord(raw);
   if (!o) return null;
   const festivalId = String(o.festivalId ?? o.festival_id ?? o.id ?? '');
@@ -395,6 +399,14 @@ function parseListItem(raw: unknown): FestivalListItem | null {
     saved: Boolean(o.saved ?? o.is_saved ?? o.isSaved),
     saves_count,
     organizer_name,
+    organizer: (() => {
+      const orgRec = asRecord(o.organizer);
+      if (!orgRec) return undefined;
+      const oslug = typeof orgRec.slug === 'string' && orgRec.slug.trim() ? orgRec.slug.trim() : null;
+      const oname = typeof orgRec.name === 'string' && orgRec.name.trim() ? orgRec.name.trim() : null;
+      if (!oslug && !oname) return undefined;
+      return { slug: oslug, name: oname };
+    })(),
     category,
     categories,
     tags,
@@ -524,6 +536,15 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
     if (flat.schedule_items.length) schedule_items = flat.schedule_items;
   }
 
+  const likesRaw = o.likes_count ?? o.likesCount;
+  let likes_count = 0;
+  if (typeof likesRaw === 'number' && Number.isFinite(likesRaw)) {
+    likes_count = Math.max(0, Math.floor(likesRaw));
+  } else if (typeof likesRaw === 'string' && likesRaw.trim()) {
+    const n = Number(likesRaw);
+    if (Number.isFinite(n)) likes_count = Math.max(0, Math.floor(n));
+  }
+
   return {
     festivalId,
     slug,
@@ -533,6 +554,8 @@ function parseDetail(raw: unknown, fallbackSlug: string): FestivalDetail {
     start_date,
     end_date,
     saved: Boolean(o.saved ?? o.is_saved ?? o.isSaved),
+    liked: Boolean(o.liked ?? o.is_liked ?? o.isLiked),
+    likes_count,
     image_url,
     gallery_urls: gallery_urls.length > 0 ? gallery_urls : undefined,
     organizer_name,

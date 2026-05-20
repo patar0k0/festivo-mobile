@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { festivalUi } from '@/components/ui/FestivalCard';
 import { useAuth } from '@/lib/auth/useAuth';
 import { getFollowedOrganizers } from '@/lib/api/followedOrganizers';
+import { getLikedFestivals } from '@/lib/api/likes';
 import { fetchInboxPage } from '@/lib/push/inbox';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 
@@ -144,6 +145,11 @@ export default function ProfileScreen() {
     queryFn: getFollowedOrganizers,
     staleTime: 1000 * 60 * 5,
   });
+  const likedQuery = useQuery({
+    queryKey: ['me', 'likes'],
+    queryFn: getLikedFestivals,
+    staleTime: 1000 * 60,
+  });
   const inboxQuery = useQuery({
     queryKey: ['inboxFirstPage'],
     queryFn: () => fetchInboxPage(null, 20),
@@ -151,6 +157,7 @@ export default function ProfileScreen() {
   });
 
   const followedCount = followedQuery.data?.length ?? 0;
+  const likedCount = likedQuery.data?.length ?? 0;
   const unreadCount = useMemo(() => {
     const items = inboxQuery.data?.items ?? [];
     return items.reduce((acc, item) => (item.unread ? acc + 1 : acc), 0);
@@ -168,6 +175,13 @@ export default function ProfileScreen() {
         key: 'interests',
         title: 'Моите интереси',
         rows: [
+          {
+            key: 'liked',
+            label: 'Харесани фестивали',
+            icon: 'heart-outline',
+            badge: likedCount > 0 ? String(likedCount) : null,
+            href: '/profile-liked-festivals' as Href,
+          },
           {
             key: 'following',
             label: 'Следвани организатори',
@@ -222,7 +236,7 @@ export default function ProfileScreen() {
         ],
       },
     ],
-    [followedCount, unreadCount],
+    [followedCount, likedCount, unreadCount],
   );
 
   const handleResetOnboarding = useCallback(() => {

@@ -24,6 +24,8 @@ export type SavedFestivalBasicDto = {
   category: string | null;
   is_verified: boolean;
   organizer_name: string | null;
+  /** Primary organizer summary for the chip → /organizer/{slug}. */
+  organizer: { slug: string | null; name: string | null } | null;
 };
 
 export type MobilePlanStateDto = {
@@ -97,6 +99,13 @@ function parsePlanState(body: unknown): MobilePlanStateDto {
           category: typeof f.category === 'string' ? f.category : null,
           is_verified: Boolean(f.is_verified),
           organizer_name: typeof f.organizer_name === 'string' ? f.organizer_name : null,
+          organizer: (() => {
+            const o = asRecord(f.organizer);
+            if (!o) return null;
+            const slug = typeof o.slug === 'string' && o.slug.trim() ? o.slug.trim() : null;
+            const name = typeof o.name === 'string' && o.name.trim() ? o.name.trim() : null;
+            return slug || name ? { slug, name } : null;
+          })(),
         }];
       })
     : [];
