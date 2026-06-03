@@ -166,12 +166,18 @@ export async function removeFestivalFromPlan(
   });
 }
 
-export async function toggleScheduleItemInPlan(
+/**
+ * Idempotent set-membership for a schedule item in the plan. `desiredInPlan`
+ * states the end state, so concurrent retries / offline replay can never flip
+ * membership the wrong way (unlike the legacy `/api/plan/items` toggle).
+ */
+export async function setScheduleItemInPlan(
   scheduleItemId: string,
+  desiredInPlan: boolean,
 ): Promise<{ ok: boolean; inPlan: boolean; scheduleItemId: string }> {
   const body = await requestMobilePlan<unknown>('/api/mobile/plan/items', {
     method: 'POST',
-    body: { scheduleItemId },
+    body: { scheduleItemId, desiredInPlan },
   });
   const rec = asRecord(body);
   return {

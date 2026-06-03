@@ -32,8 +32,11 @@ import {
   type FestivalListItem,
   type FestivalScheduleItem,
 } from '@/lib/api/festivals';
-import type { SavedFestivalBasicDto } from '@/lib/api/mobilePlan';
-import { toggleScheduleItemInPlan, type MobilePlanReminderType } from '@/lib/api/mobilePlan';
+import {
+  setScheduleItemInPlan,
+  type MobilePlanReminderType,
+  type SavedFestivalBasicDto,
+} from '@/lib/api/mobilePlan';
 import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { formatScheduleTime, getFestivalScheduleTimeZone, groupFestivalSchedule } from '@/lib/plan/schedule';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
@@ -708,12 +711,12 @@ export default function PlanScreen() {
     if (cleaningOrphans || orphanedScheduleItemIds.length === 0) return;
     setCleaningOrphans(true);
     try {
-      // POST /api/plan/items toggles — calling on an existing id deletes the
-      // row, so we issue one call per orphan id. Sequential is fine; orphans
+      // Idempotent removal — one call per orphan id, desiredInPlan=false always
+      // deletes the row (no-op if already gone). Sequential is fine; orphans
       // are usually a handful at most.
       for (const id of orphanedScheduleItemIds) {
         try {
-          await toggleScheduleItemInPlan(id);
+          await setScheduleItemInPlan(id, false);
         } catch (err) {
           if (__DEV__) console.warn('[plan][cleanup orphan failed]', { id, err });
         }
