@@ -1,6 +1,6 @@
 import { type Query, type QueryKey, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { toggleScheduleItemInPlan, type MobilePlanStateDto } from '@/lib/api/mobilePlan';
+import { setScheduleItemInPlan, type MobilePlanStateDto } from '@/lib/api/mobilePlan';
 import { debugLogRare, debugLogWarn } from '@/lib/debug/mobileDiagnosticsHelpers';
 import {
   bumpPlannerMutationIntent,
@@ -15,6 +15,8 @@ import { assertPlannerMutableScheduleItemId, isSyntheticPlannerScheduleItemId } 
 
 type ToggleInput = {
   scheduleItemId: string;
+  /** Desired end state — comes from the UI's current planned flag (`!planned`). */
+  desiredInPlan: boolean;
 };
 
 type Snapshot = {
@@ -68,11 +70,13 @@ function patchAllMobilePlanQueries(
 export function useTogglePlanScheduleItemMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ scheduleItemId }: ToggleInput) => {
+    mutationFn: ({ scheduleItemId, desiredInPlan }: ToggleInput) => {
       assertPlannerMutableScheduleItemId(scheduleItemId);
-      return runSerializedScheduleToggle(scheduleItemId, () => toggleScheduleItemInPlan(scheduleItemId));
+      return runSerializedScheduleToggle(scheduleItemId, () =>
+        setScheduleItemInPlan(scheduleItemId, desiredInPlan),
+      );
     },
-    onMutate: async ({ scheduleItemId }): Promise<ToggleContext | undefined> => {
+    onMutate: async ({ scheduleItemId, desiredInPlan }): Promise<ToggleContext | undefined> => {
       if (isSyntheticPlannerScheduleItemId(scheduleItemId)) {
         return undefined;
       }
@@ -82,9 +86,6 @@ export function useTogglePlanScheduleItemMutation() {
       const snapshots = queryClient
         .getQueriesData(predicate)
         .map(([queryKey, data]) => ({ queryKey, data }));
-
-      const currentPlan = queryClient.getQueryData<MobilePlanStateDto>(['mobilePlanState']);
-      const desiredInPlan = !currentPlan?.savedScheduleItemIds.includes(scheduleItemId);
 
       const changedCount = patchAllMobilePlanQueries(queryClient, scheduleItemId, desiredInPlan);
       if (changedCount > 0) {

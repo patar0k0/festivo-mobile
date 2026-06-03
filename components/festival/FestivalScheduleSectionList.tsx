@@ -25,7 +25,7 @@ import { isSyntheticPlannerScheduleItemId } from '@/lib/plan/scheduleItemId';
 import type { ReactElement } from 'react';
 import type { UseMutationResult } from '@tanstack/react-query';
 
-type ToggleArgs = { scheduleItemId: string };
+type ToggleArgs = { scheduleItemId: string; desiredInPlan: boolean };
 
 type Props = {
   detail: FestivalDetail;
@@ -189,7 +189,7 @@ export const FestivalScheduleSectionList = memo(function FestivalScheduleSection
             setPendingItemIds((prev) => new Set(prev).add(item.id));
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             toggleScheduleItemMutation.mutate(
-              { scheduleItemId: item.id },
+              { scheduleItemId: item.id, desiredInPlan: !planned },
               {
                 onSettled: () => {
                   setPendingItemIds((prev) => {

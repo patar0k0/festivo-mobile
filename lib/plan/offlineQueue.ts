@@ -5,7 +5,7 @@ import {
   getMobilePlanState,
   removeFestivalFromPlan,
   saveFestivalToPlan,
-  toggleScheduleItemInPlan,
+  setScheduleItemInPlan,
   updateFestivalReminder,
   type MobilePlanReminderType,
   type MobilePlanStateDto,
@@ -404,7 +404,7 @@ export async function replayQueuedPlannerMutations(queryClient: QueryClient): Pr
         } else if (item.kind === 'scheduleItem') {
           const hasItem = serverState.savedScheduleItemIds.includes(item.scheduleItemId);
           if (hasItem !== item.desiredInPlan) {
-            await toggleScheduleItemInPlan(item.scheduleItemId);
+            await setScheduleItemInPlan(item.scheduleItemId, item.desiredInPlan);
           }
         } else if (!reminderMatchesServer(serverState, item.festivalId, item.reminderType)) {
           await updateFestivalReminder(item.festivalId, item.reminderType);
