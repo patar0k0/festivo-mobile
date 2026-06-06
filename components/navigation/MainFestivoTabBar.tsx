@@ -47,7 +47,7 @@ function SideTabButton({
     route.name,
   );
   const color = focused ? ACCENT_COLOR : INACTIVE_TINT;
-  const labelColor = focused ? ACTIVE_TINT : INACTIVE_TINT;
+  const labelColor = focused ? ACCENT_COLOR : INACTIVE_TINT;
 
   const onPress = () => {
     emitTabHaptic();
@@ -78,7 +78,7 @@ function SideTabButton({
       onPress={onPress}
       onLongPress={onLongPress}
       style={styles.sidePressable}>
-      <View style={styles.sideIconSlot}>
+      <View style={[styles.sideIconSlot, focused && styles.sideIconPill]}>
         {options.tabBarIcon?.({ focused, color, size: 24 })}
       </View>
       <Text style={[styles.sideLabel, { color: labelColor }]} numberOfLines={1}>
@@ -178,7 +178,6 @@ function CenterPlanButton({
             color: focused ? ACCENT_COLOR : INACTIVE_TINT,
             size: focused ? 28 : 26,
           })}
-          {focused && <View style={styles.activeDot} />}
         </View>
       </Animated.View>
       <Text
@@ -312,8 +311,13 @@ const styles = StyleSheet.create({
   },
   sideIconSlot: {
     height: TAB_BAR_METRICS.sideIconSlotHeight,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 16,
+  },
+  sideIconPill: {
+    backgroundColor: '#fef2ee',
   },
   sideLabel: {
     marginTop: 2,
@@ -340,17 +344,17 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   centerOrbActive: {
-    backgroundColor: '#7c2d12',
+    backgroundColor: '#FFFFFF',
     borderWidth: 0,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.14,
+        shadowRadius: 12,
       },
       default: {
-        elevation: 4,
+        elevation: 6,
       },
     }),
   },
