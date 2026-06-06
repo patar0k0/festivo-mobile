@@ -15,7 +15,7 @@ const colors = {
   secondary: '#6B7280',
   muted: '#9CA3AF',
   border: '#E5E7EB',
-  buttonBg: '#111827',
+  buttonBg: '#7c2d12',
   buttonText: '#FFFFFF',
   buttonOutline: '#D1D5DB',
 };

@@ -26,39 +26,28 @@ import { trackEvent } from '@/lib/analytics/track';
 import { BULGARIA_REGION, getSofiaRegion, isValidCoordinatePair, looksLikeBulgaria } from '@/lib/map/coordinates';
 import { festivalDetailHref } from '@/lib/navigation/festivalDetailHref';
 import { formatDateRangeRelative } from '@/lib/festival/relativeDate';
+import { getOnboardingSuggestions } from '@/lib/api/onboardingSuggestions';
+import { emojiForCategory } from '@/lib/personalization/categoryEmoji';
 
 const MAX_VISIBLE_POINTS = 90;
 const MAX_RAW_VIEWPORT = 200;
+/** How many category chips to show after "Всички" and "Тази седмица". */
+const MAX_CATEGORY_CHIPS = 6;
 
 type MapFilter = {
   id: string;
   label: string;
   when?: 'this_week';
-  /**
-   * Substring(s) matched case-insensitively against the festival's
-   * `category` field on the client. The DB stores Bulgarian free-form
-   * category text ("Фолклорен фестивал", "Кулинарно-фолклорен", "Винен
-   * фестивал", ...), so an exact-slug server filter would always be
-   * empty. Match the substring locally instead.
-   */
-  categoryMatches?: string[];
+  /** Server-side category slug — sent to `getFestivals({ category })`. */
+  categorySlug?: string;
 };
 
-const MAP_FILTERS: MapFilter[] = [
+const STATIC_MAP_FILTERS: MapFilter[] = [
   { id: 'all', label: 'Всички' },
   { id: 'this_week', label: 'Тази седмица', when: 'this_week' },
-  { id: 'folk', label: '🎭 Фолклор', categoryMatches: ['фолклор'] },
-  { id: 'sabor', label: '🎉 Събори', categoryMatches: ['събор'] },
-  { id: 'culinary', label: '🍲 Кулинарни', categoryMatches: ['кулинар', 'храна'] },
-  { id: 'wine', label: '🍷 Винени', categoryMatches: ['вин'] },
-  { id: 'traditional', label: '🏛 Традиции', categoryMatches: ['традиц'] },
 ];
 
-function categoryMatchesFilter(category: string | undefined, matches: string[]): boolean {
-  if (!category) return false;
-  const lc = category.toLowerCase();
-  return matches.some((m) => lc.includes(m));
-}
+
 const REGION_DEBOUNCE_MS = 420;
 /** After custom Marker children mount on Android Google Maps, allow one paint cycle then stop tracking (avoids empty snapshots). */
 const ANDROID_MARKER_TRACK_VIEW_MS = 480;
@@ -216,32 +205,47 @@ export default function FestivalsMapScreen() {
     () => Platform.OS === 'android',
   );
   const [activeFilterId, setActiveFilterId] = useState<string>('all');
+
+  /** Real categories from the server — same source as onboarding. */
+  const { data: categorySuggestions } = useQuery({
+    queryKey: ['onboarding', 'suggestions', 'categories'],
+    queryFn: () => getOnboardingSuggestions(),
+    staleTime: 10 * 60_000,
+    select: (res) => res.categories.slice(0, MAX_CATEGORY_CHIPS),
+  });
+
+  /** Merge static chips + dynamic category chips. */
+  const mapFilters = useMemo((): MapFilter[] => {
+    const categoryChips: MapFilter[] = (categorySuggestions ?? []).map((cat) => ({
+      id: cat.slug,
+      label: cat.label_bg,
+      categorySlug: cat.slug,
+    }));
+    return [...STATIC_MAP_FILTERS, ...categoryChips];
+  }, [categorySuggestions]);
+
   const activeFilter = useMemo(
-    () => MAP_FILTERS.find((f) => f.id === activeFilterId) ?? MAP_FILTERS[0]!,
-    [activeFilterId],
+    () => mapFilters.find((f) => f.id === activeFilterId) ?? STATIC_MAP_FILTERS[0]!,
+    [activeFilterId, mapFilters],
   );
 
   /**
-   * Fetch a wide pool keyed only on `when` (server-side temporal filter).
-   * Category chips are matched client-side because the DB `category` field
-   * is free-form Bulgarian text — see `MAP_FILTERS.categoryMatches`.
+   * Use server-side filters: `when` for temporal, `category` for category chips.
+   * No more client-side substring matching — the server knows its own slugs.
    */
   const { data: rawData, isPending, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['festivals', 'map', 'trending', activeFilter.when ?? 'all'],
+    queryKey: ['festivals', 'map', 'trending', activeFilter.when ?? 'all', activeFilter.categorySlug ?? ''],
     queryFn: () =>
       getFestivals({
         sort: 'trending',
         limit: 220,
         when: activeFilter.when,
+        category: activeFilter.categorySlug,
       }),
     staleTime: 60_000,
   });
 
-  const data = useMemo(() => {
-    const list = rawData ?? [];
-    if (!activeFilter.categoryMatches) return list;
-    return list.filter((item) => categoryMatchesFilter(item.category, activeFilter.categoryMatches!));
-  }, [activeFilter.categoryMatches, rawData]);
+  const data = rawData ?? [];
 
   const onSelectFilter = useCallback((id: string) => {
     void Haptics.selectionAsync();
@@ -615,7 +619,7 @@ export default function FestivalsMapScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterScrollContent}>
-          {MAP_FILTERS.map((f) => {
+          {mapFilters.map((f) => {
             const isActive = f.id === activeFilterId;
             return (
               <Pressable
@@ -832,7 +836,7 @@ const styles = StyleSheet.create({
     left: 20,
     alignSelf: 'flex-start',
     borderRadius: 999,
-    backgroundColor: '#111827',
+    backgroundColor: '#7c2d12',
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
