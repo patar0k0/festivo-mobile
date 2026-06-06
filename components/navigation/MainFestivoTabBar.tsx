@@ -10,7 +10,7 @@ import { TAB_BAR_METRICS, tabBarPaddingBottom } from '@/lib/navigation/tabBarMet
 
 const ACTIVE_TINT = '#0F172A';
 const INACTIVE_TINT = '#94A3B8';
-const ACCENT_COLOR = '#4F46E5';
+const ACCENT_COLOR = '#7c2d12';
 
 type TabRoute = BottomTabBarProps['state']['routes'][number];
 
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   centerOrbActive: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#7c2d12',
     borderWidth: 0,
     ...Platform.select({
       ios: {
