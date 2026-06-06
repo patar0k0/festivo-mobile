@@ -241,7 +241,7 @@ function HomeHeader({ onSearchPress }: { onSearchPress: () => void }) {
     <View style={styles.headerRow}>
       <View style={styles.headerLogoRow}>
         <ExpoImage
-          source={require('@/assets/images/icon.png')}
+          source={require('@/assets/images/festivo-logo-badge.jpg')}
           style={styles.headerLogoIcon}
           contentFit="cover"
         />
@@ -1208,7 +1208,7 @@ const styles = StyleSheet.create({
   headerLogoIcon: {
     width: 44,
     height: 44,
-    borderRadius: 10,
+    borderRadius: 22,
     marginRight: 10,
   },
   headerTitles: {
