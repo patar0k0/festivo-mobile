@@ -239,9 +239,16 @@ function PopularSkeletonRow() {
 function HomeHeader({ onSearchPress }: { onSearchPress: () => void }) {
   return (
     <View style={styles.headerRow}>
-      <View style={styles.headerTitles}>
-        <Text style={styles.headerTitle}>Festivo</Text>
-        <Text style={styles.headerSubtitle}>Събития в България</Text>
+      <View style={styles.headerLogoRow}>
+        <ExpoImage
+          source={require('@/assets/images/icon.png')}
+          style={styles.headerLogoIcon}
+          contentFit="cover"
+        />
+        <View style={styles.headerTitles}>
+          <Text style={styles.headerTitle}>Festivo</Text>
+          <Text style={styles.headerSubtitle}>Събития в България</Text>
+        </View>
       </View>
       <Pressable
         onPress={onSearchPress}
@@ -1188,23 +1195,34 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 20,
   },
-  headerTitles: {
+  headerLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
     paddingRight: 12,
   },
+  headerLogoIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    marginRight: 10,
+  },
+  headerTitles: {
+    flex: 1,
+  },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '800',
     color: COLORS.text,
     letterSpacing: -0.5,
   },
   headerSubtitle: {
-    marginTop: 4,
-    fontSize: 15,
+    marginTop: 1,
+    fontSize: 13,
     color: COLORS.secondary,
     fontWeight: '500',
   },
