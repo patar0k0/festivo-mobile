@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   sideIconPill: {
-    backgroundColor: '#fef2ee',
+    backgroundColor: '#fde8e0',
   },
   sideLabel: {
     marginTop: 2,
@@ -345,12 +345,13 @@ const styles = StyleSheet.create({
   },
   centerOrbActive: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 0,
+    borderWidth: 2,
+    borderColor: '#7c2d12',
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: '#7c2d12',
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.14,
+        shadowOpacity: 0.25,
         shadowRadius: 12,
       },
       default: {
