@@ -4,6 +4,7 @@ import {
   bumpPlannerMutationIntent,
   isLatestPlannerMutationIntent,
 } from '@/lib/plan/plannerMutationIntent';
+import { trackEvent } from '@/lib/analytics/track';
 import {
   type MobilePlanReminderType,
   type MobilePlanStateDto,
@@ -77,6 +78,11 @@ export function useUpdatePlanReminderMutation() {
         return;
       }
       const type = result?.type ?? variables.type;
+      void trackEvent({
+        event: 'reminder_changed',
+        festival_id: variables.festivalId,
+        metadata: { reminderType: type },
+      });
       queryClient.setQueryData<MobilePlanStateDto>(['mobilePlanState'], (current) => {
         if (!current) return current;
         return {

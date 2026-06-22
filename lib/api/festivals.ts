@@ -16,7 +16,9 @@ export type GetFestivalsParams = {
   startDate?: string;
   endDate?: string;
   sort?: 'trending' | 'popular';
-  when?: 'this_week';
+  when?: 'upcoming' | 'ongoing' | 'weekend' | 'this_week';
+  /** Show only free/no-entry-fee events */
+  free?: boolean;
 };
 
 export type FestivalListItem = {
@@ -24,6 +26,8 @@ export type FestivalListItem = {
   slug: string;
   title: string;
   city: string;
+  /** Normalised slug for the city/settlement (e.g. "sofia"). Use as city filter value. */
+  city_slug?: string | null;
   start_date: string;
   end_date?: string;
   image_url?: string | null;
@@ -383,11 +387,17 @@ export function parseListItem(raw: unknown): FestivalListItem | null {
   const latParsed = parseOptionalCoord(o.lat ?? o.latitude);
   const lngParsed = parseOptionalCoord(o.lng ?? o.longitude);
 
+  const city_slug =
+    typeof o.city_slug === 'string' && o.city_slug.trim()
+      ? o.city_slug.trim().toLowerCase()
+      : null;
+
   return {
     festivalId,
     slug,
     title,
     city: String(o.city ?? ''),
+    city_slug,
     start_date: String(o.start_date ?? o.startDate ?? ''),
     end_date: endRaw != null && String(endRaw).trim() ? String(endRaw) : undefined,
     image_url:
@@ -604,6 +614,7 @@ export async function getFestivals(params?: GetFestivalsParams): Promise<Festiva
   if (params?.when) search.set('when', params.when);
   if (params?.startDate?.trim()) search.set('from', params.startDate.trim());
   if (params?.endDate?.trim()) search.set('to', params.endDate.trim());
+  if (params?.free != null) search.set('free', params.free ? '1' : '0');
 
   const qs = search.toString();
   const path = `/api/mobile/festivals?${qs}`;

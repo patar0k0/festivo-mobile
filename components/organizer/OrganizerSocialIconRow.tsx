@@ -11,6 +11,8 @@ type IoniconName = ComponentProps<typeof Ionicons>['name'];
 export type OrganizerSocialLink = {
   key: string;
   url: string;
+  /** Native app deep-link URL. Tried first; falls back to `url` if not openable. */
+  nativeUrl?: string;
   icon: IoniconName;
   accessibilityLabel: string;
 };
@@ -18,6 +20,21 @@ export type OrganizerSocialLink = {
 type Props = {
   links: OrganizerSocialLink[];
 };
+
+async function openSocialLink(link: OrganizerSocialLink): Promise<void> {
+  if (link.nativeUrl) {
+    try {
+      const canOpen = await Linking.canOpenURL(link.nativeUrl);
+      if (canOpen) {
+        await Linking.openURL(link.nativeUrl);
+        return;
+      }
+    } catch {
+      // app not installed — fall through to web URL
+    }
+  }
+  await Linking.openURL(link.url);
+}
 
 export function OrganizerSocialIconRow({ links }: Props) {
   if (links.length === 0) return null;
@@ -30,7 +47,7 @@ export function OrganizerSocialIconRow({ links }: Props) {
           accessibilityRole="button"
           accessibilityLabel={link.accessibilityLabel}
           onPress={() => {
-            void Linking.openURL(link.url);
+            void openSocialLink(link);
           }}
           pressedScale={0.94}
           pressedOpacity={0.85}

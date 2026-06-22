@@ -1,12 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { View, StyleSheet } from 'react-native';
 
+import { OfflineQueueBanner } from '@/components/plan/OfflineQueueBanner';
 import { MainFestivoTabBar } from '@/components/navigation/MainFestivoTabBar';
 import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 
 export default function TabsGroupLayout() {
   useMobilePlanState();
   return (
+    <View style={styles.root}>
+    <OfflineQueueBanner />
     <Tabs
       tabBar={(props) => <MainFestivoTabBar {...props} />}
       screenOptions={{
@@ -76,5 +80,10 @@ export default function TabsGroupLayout() {
         }}
       />
     </Tabs>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});

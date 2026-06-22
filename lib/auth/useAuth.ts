@@ -13,7 +13,7 @@ import {
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 
-import { getSupabaseClient, isNativeSupabaseRuntime } from '@/lib/supabase/client';
+import { getSupabaseClient, isNativeSupabaseRuntime, waitForSessionReady } from '@/lib/supabase/client';
 
 // Warm up the browser on Android for faster OAuth sheet open
 if (Platform.OS === 'android') {
@@ -168,6 +168,10 @@ export async function getAccessToken(): Promise<string | null> {
   if ((Platform.OS !== 'ios' && Platform.OS !== 'android') || typeof window === 'undefined') {
     return null;
   }
+  // Wait for Supabase to finish reading from AsyncStorage before asking for
+  // the session — without this, cold-start API calls race the storage read and
+  // get a null token even when the user is logged in.
+  await waitForSessionReady();
   const supabase = getSupabaseClient();
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;

@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { festivalUi } from '@/components/ui/FestivalCard';
 
@@ -13,58 +14,64 @@ export const POPULAR_CITIES_BG = [
   'Стара Загора',
 ] as const;
 
+const CITY_EMOJI: Record<string, string> = {
+  'София':        '🏛️',
+  'Пловдив':      '🏺',
+  'Варна':        '🌊',
+  'Бургас':       '⛵',
+  'Русе':         '🌉',
+  'Стара Загора': '🌾',
+};
+
 export type PopularCitiesProps = {
   onSelectCity: (city: string) => void;
 };
 
 export function PopularCities({ onSelectCity }: PopularCitiesProps) {
   return (
-    <View style={styles.wrap}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.scrollContent}>
-        {POPULAR_CITIES_BG.map((city) => (
-          <Pressable
-            key={city}
-            onPress={() => onSelectCity(city)}
-            style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-            accessibilityRole="button"
-            accessibilityLabel={`Град: ${city}`}>
-            <Text style={styles.chipText}>{city}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+    <View style={styles.grid}>
+      {POPULAR_CITIES_BG.map((city) => (
+        <Pressable
+          key={city}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onSelectCity(city);
+          }}
+          style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`Град: ${city}`}>
+          <Text style={styles.chipEmoji}>{CITY_EMOJI[city] ?? '📍'}</Text>
+          <Text style={styles.chipText}>{city}</Text>
+        </Pressable>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    marginHorizontal: -4,
-  },
-  scrollContent: {
+  grid: {
     flexDirection: 'row',
-    flexWrap: 'nowrap',
-    gap: 10,
-    paddingHorizontal: 4,
-    paddingBottom: 2,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   chip: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: COLORS.border,
   },
   chipPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.98 }],
+    opacity: 0.82,
+    transform: [{ scale: 0.97 }],
   },
+  chipEmoji: { fontSize: 15 },
   chipText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
   },

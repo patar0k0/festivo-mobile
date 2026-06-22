@@ -1,6 +1,7 @@
 import { type Query, type QueryKey, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { setScheduleItemInPlan, type MobilePlanStateDto } from '@/lib/api/mobilePlan';
+import { trackEvent } from '@/lib/analytics/track';
 import { debugLogRare, debugLogWarn } from '@/lib/debug/mobileDiagnosticsHelpers';
 import {
   bumpPlannerMutationIntent,
@@ -133,6 +134,10 @@ export function useTogglePlanScheduleItemMutation() {
         return;
       }
       const serverInPlan = Boolean(result?.inPlan);
+      void trackEvent({
+        event: 'schedule_item_toggled',
+        metadata: { scheduleItemId: variables.scheduleItemId, inPlan: serverInPlan },
+      });
       queryClient.setQueryData(['mobilePlanState'], (data: MobilePlanStateDto | undefined) =>
         reconcileMobilePlanSnapshotItem(data, variables.scheduleItemId, serverInPlan),
       );

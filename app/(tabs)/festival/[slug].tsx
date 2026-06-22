@@ -2,21 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
-import * as Linking from 'expo-linking';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   LayoutAnimation,
   Modal,
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   UIManager,
@@ -47,7 +44,6 @@ import { useMobilePlanState } from '@/lib/query/useMobilePlanState';
 import { useTogglePlanScheduleItemMutation } from '@/lib/query/useTogglePlanScheduleItemMutation';
 import { useToggleLikedMutation } from '@/lib/query/useToggleLikedMutation';
 import { useToggleSavedMutation } from '@/lib/query/useToggleSavedMutation';
-import { getFestivalIcsUrl, getFestivalPublicUrl } from '@/lib/site';
 
 if (
   Platform.OS === 'android' &&
@@ -437,17 +433,6 @@ export default function FestivalDetailScreen() {
     [toggleSavedMutation],
   );
 
-  const handleShare = useCallback(() => {
-    if (!data) return;
-    const url = getFestivalPublicUrl(data.slug);
-    const line1 = data.title.trim();
-    if (!url) {
-      Alert.alert('Споделяне', 'Липсва адрес на сайта. Задай EXPO_PUBLIC_SITE_URL или EXPO_PUBLIC_API_URL.');
-      return;
-    }
-    void Share.share({ message: `${line1}\n${url}` });
-  }, [data]);
-
   const mapsQueryFromDetail = useCallback((d: FestivalDetail) => {
     return buildLocationQuery([
       d.location?.location_name,
@@ -467,21 +452,6 @@ export default function FestivalDetailScreen() {
       queryFallback: mapsQueryFromDetail(data),
     });
   }, [data, mapsQueryFromDetail]);
-
-  const handleCalendar = useCallback(async () => {
-    if (!data) return;
-    const ics = getFestivalIcsUrl(data.slug);
-    if (!ics) {
-      Alert.alert('Календар', 'Не можем да отворим календарния линк. Провери EXPO_PUBLIC_SITE_URL.');
-      return;
-    }
-    void Haptics.selectionAsync();
-    try {
-      await Linking.openURL(ics);
-    } catch {
-      void Share.share({ message: `${data.title}\n${ics}` });
-    }
-  }, [data]);
 
   if (!slug) {
     return (
@@ -633,9 +603,6 @@ export default function FestivalDetailScreen() {
             saved={data.saved}
             saveBusy={isSaving}
             onSave={() => onToggleSave(data)}
-            onShare={handleShare}
-            onCalendar={handleCalendar}
-            calendarDisabled={!getFestivalIcsUrl(data.slug)}
           />
         </Reanimated.View>
 

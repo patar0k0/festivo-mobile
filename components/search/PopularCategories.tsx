@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { festivalUi } from '@/components/ui/FestivalCard';
 
@@ -14,58 +15,65 @@ export const POPULAR_CATEGORIES_BG = [
   'Джаз',
 ] as const;
 
+const CATEGORY_EMOJI: Record<string, string> = {
+  'Фолклор':    '🪗',
+  'Концерти':   '🎵',
+  'Храна':      '🍽️',
+  'Деца':       '🎠',
+  'Традиции':   '🪔',
+  'Рок':        '🎸',
+  'Джаз':       '🎷',
+};
+
 export type PopularCategoriesProps = {
   onSelectCategory: (label: string) => void;
 };
 
 export function PopularCategories({ onSelectCategory }: PopularCategoriesProps) {
   return (
-    <View style={styles.wrap}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.scrollContent}>
-        {POPULAR_CATEGORIES_BG.map((label) => (
-          <Pressable
-            key={label}
-            onPress={() => onSelectCategory(label)}
-            style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-            accessibilityRole="button"
-            accessibilityLabel={`Категория: ${label}`}>
-            <Text style={styles.chipText}>{label}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+    <View style={styles.grid}>
+      {POPULAR_CATEGORIES_BG.map((label) => (
+        <Pressable
+          key={label}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onSelectCategory(label);
+          }}
+          style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`Категория: ${label}`}>
+          <Text style={styles.chipEmoji}>{CATEGORY_EMOJI[label] ?? '🎉'}</Text>
+          <Text style={styles.chipText}>{label}</Text>
+        </Pressable>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    marginHorizontal: -4,
-  },
-  scrollContent: {
+  grid: {
     flexDirection: 'row',
-    flexWrap: 'nowrap',
-    gap: 10,
-    paddingHorizontal: 4,
-    paddingBottom: 2,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   chip: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#C7D2FE',
+    borderColor: COLORS.border,
   },
   chipPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.98 }],
+    opacity: 0.82,
+    transform: [{ scale: 0.97 }],
   },
+  chipEmoji: { fontSize: 15 },
   chipText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
   },

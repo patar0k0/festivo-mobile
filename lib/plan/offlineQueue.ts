@@ -409,7 +409,6 @@ export async function replayQueuedPlannerMutations(queryClient: QueryClient): Pr
         } else if (!reminderMatchesServer(serverState, item.festivalId, item.reminderType)) {
           await updateFestivalReminder(item.festivalId, item.reminderType);
         }
-        serverState = await getMobilePlanState();
       } catch (error) {
         debugLogWarn({
           type: 'planner_queue_replay_error',
@@ -427,6 +426,11 @@ export async function replayQueuedPlannerMutations(queryClient: QueryClient): Pr
     }
 
     await writeQueue(remaining);
+    try {
+      serverState = await getMobilePlanState();
+    } catch {
+      // best-effort refresh; cached optimistic state is still better than stale
+    }
     queryClient.setQueryData(['mobilePlanState'], serverState);
     queryClient.invalidateQueries({ queryKey: ['mobilePlanState'] });
     const replayCompleteEvent = {

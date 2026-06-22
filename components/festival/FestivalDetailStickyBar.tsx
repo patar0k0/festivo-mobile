@@ -2,101 +2,48 @@ import { Ionicons } from '@expo/vector-icons';
 import { memo } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
-import { AnimatedBookmark } from '@/components/ui/AnimatedBookmark';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { festivalUi } from '@/components/ui/FestivalCard';
-
-const BAR_HEIGHT = 50;
 
 type Props = {
   saved: boolean;
   saveBusy: boolean;
   onSave: () => void;
-  onShare: () => void;
-  onCalendar: () => void;
-  calendarDisabled?: boolean;
 };
 
 export const FestivalDetailStickyBar = memo(function FestivalDetailStickyBar({
   saved,
   saveBusy,
   onSave,
-  onShare,
-  onCalendar,
-  calendarDisabled,
 }: Props) {
   return (
     <View style={styles.wrap} pointerEvents="box-none">
       <View style={styles.inner}>
-        <ActionIcon
-          label={saved ? 'В плана' : 'В план'}
-          icon={saved ? 'checkmark-circle' : 'add-circle-outline'}
+        <PressableScale
           onPress={onSave}
           disabled={saveBusy}
-          loading={saveBusy}
-          primary
-        />
-        <ActionIcon label="Сподели" icon="share-outline" onPress={onShare} />
-        <ActionIcon
-          label="Календар"
-          icon="calendar-outline"
-          onPress={onCalendar}
-          disabled={calendarDisabled}
-        />
+          pressedScale={0.97}
+          pressedOpacity={0.88}
+          style={[styles.btn, saved && styles.btnSaved]}
+          accessibilityRole="button"
+          accessibilityLabel={saved ? 'Премахни от плана' : 'Добави в плана'}>
+          {saveBusy ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Ionicons
+              name={saved ? 'checkmark-circle' : 'add-circle-outline'}
+              size={22}
+              color="#FFFFFF"
+            />
+          )}
+          <Text style={styles.btnLabel} numberOfLines={1}>
+            {saved ? 'В плана' : 'Добави в плана'}
+          </Text>
+        </PressableScale>
       </View>
     </View>
   );
 });
-
-function ActionIcon({
-  label,
-  icon,
-  bookmarkFilled,
-  onPress,
-  disabled,
-  loading,
-  primary,
-}: {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  /** When set, render an AnimatedBookmark (with pulse) instead of a plain Ionicon. */
-  bookmarkFilled?: boolean;
-  onPress: () => void;
-  disabled?: boolean;
-  loading?: boolean;
-  primary?: boolean;
-}) {
-  const showBookmark = typeof bookmarkFilled === 'boolean';
-  return (
-    <PressableScale
-      onPress={onPress}
-      disabled={disabled || loading}
-      pressedScale={0.96}
-      pressedOpacity={0.9}
-      style={[
-        styles.action,
-        primary && styles.actionPrimary,
-        (disabled || loading) && styles.actionDisabled,
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={label}>
-      {loading ? (
-        <ActivityIndicator size="small" color="#FFFFFF" />
-      ) : showBookmark ? (
-        <AnimatedBookmark
-          filled={Boolean(bookmarkFilled)}
-          size={22}
-          color={primary ? '#FFFFFF' : festivalUi.colors.text}
-        />
-      ) : (
-        <Ionicons name={icon} size={22} color={primary ? '#FFFFFF' : festivalUi.colors.text} />
-      )}
-      <Text style={[styles.actionLabel, primary && styles.actionLabelPrimary]} numberOfLines={1}>
-        {label}
-      </Text>
-    </PressableScale>
-  );
-}
 
 const styles = StyleSheet.create({
   wrap: {
@@ -115,34 +62,40 @@ const styles = StyleSheet.create({
     }),
   },
   inner: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingTop: 5,
-    minHeight: BAR_HEIGHT,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  action: {
-    flex: 1,
+  btn: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 5,
-    marginHorizontal: 2,
-    borderRadius: 12,
-    gap: 3,
-  },
-  actionPrimary: {
+    gap: 9,
+    paddingVertical: 15,
+    borderRadius: 16,
     backgroundColor: festivalUi.colors.buttonBg,
+    ...Platform.select({
+      ios: {
+        shadowColor: festivalUi.colors.buttonBg,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
+      },
+      android: { elevation: 4 },
+    }),
   },
-  actionDisabled: {
-    opacity: 0.45,
+  btnSaved: {
+    backgroundColor: '#059669',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#059669',
+        shadowOpacity: 0.3,
+      },
+    }),
   },
-  actionLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: festivalUi.colors.text,
-  },
-  actionLabelPrimary: {
+  btnLabel: {
+    fontSize: 17,
+    fontWeight: '800',
     color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
 });

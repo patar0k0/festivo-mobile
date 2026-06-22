@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tab Bar Styles — Festivo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #f0ede8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; }
+  h1 { text-align: center; color: #7c2d12; font-size: 22px; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #6B7280; font-size: 14px; margin-bottom: 32px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 32px; max-width: 1400px; margin: 0 auto; }
+  .card { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+  .card-title { padding: 14px 18px; font-size: 13px; font-weight: 700; color: #374151; background: #f9fafb; border-bottom: 1px solid #E5E7EB; letter-spacing: 0.3px; }
+  .card-label { font-size: 11px; color: #9CA3AF; font-weight: 500; margin-left: 6px; }
+  .phone { background: #f6f5f1; height: 160px; display: flex; flex-direction: column; }
+  .content { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .content-text { font-size: 13px; color: #9CA3AF; }
+
+  /* ===== ICONS ===== */
+  .icon { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .icon svg { display: block; }
+  .icon-label { font-size: 10px; font-weight: 500; }
+
+  /* ===== 1. Standard ===== */
+  .tab-standard { display: flex; background: white; border-top: 1px solid #E5E7EB; padding: 8px 0 12px; }
+  .tab-standard .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; }
+  .tab-standard .tab .icon-label { font-size: 10px; color: #94A3B8; }
+  .tab-standard .tab.active .icon-label { color: #7c2d12; font-weight: 600; }
+
+  /* ===== 2. FAB center ===== */
+  .tab-fab { display: flex; background: white; border-top: 1px solid #E5E7EB; padding: 8px 16px 12px; align-items: flex-end; position: relative; }
+  .tab-fab .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .tab-fab .tab .icon-label { font-size: 10px; color: #94A3B8; }
+  .tab-fab .tab.active .icon-label { color: #7c2d12; }
+  .fab-center { display: flex; flex-direction: column; align-items: center; gap: 3px; margin-top: -22px; }
+  .fab-orb { width: 52px; height: 52px; border-radius: 26px; background: #7c2d12; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(124,45,18,0.35); }
+  .fab-orb-idle { width: 52px; height: 52px; border-radius: 26px; background: #F3F4F6; border: 1px solid #E5E7EB; display: flex; align-items: center; justify-content: center; }
+  .fab-label { font-size: 10px; color: #7c2d12; font-weight: 600; }
+  .fab-label-idle { font-size: 10px; color: #94A3B8; }
+
+  /* ===== 3. FAB White orb ===== */
+  .fab-orb-white { width: 52px; height: 52px; border-radius: 26px; background: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 16px rgba(0,0,0,0.14); border: 1.5px solid #f0ede8; }
+
+  /* ===== 4. Pill active ===== */
+  .tab-pill { display: flex; background: white; border-top: 1px solid #E5E7EB; padding: 8px 4px 12px; }
+  .tab-pill .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .tab-pill .tab .icon-label { font-size: 10px; color: #94A3B8; }
+  .tab-pill .tab.active .icon-label { color: #7c2d12; font-weight: 600; }
+  .pill-icon-wrap { padding: 5px 16px; border-radius: 16px; }
+  .pill-icon-wrap.active-pill { background: #fef2ee; }
+
+  /* ===== 5. Floating ===== */
+  .tab-floating-wrap { padding: 0 12px 12px; background: #f6f5f1; }
+  .tab-floating { display: flex; background: white; border-radius: 20px; padding: 8px 8px 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
+  .tab-floating .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .tab-floating .tab .icon-label { font-size: 10px; color: #94A3B8; }
+  .tab-floating .tab.active .icon-label { color: #7c2d12; font-weight: 600; }
+
+  /* ===== 6. Icon only ===== */
+  .tab-icon-only { display: flex; background: white; border-top: 1px solid #E5E7EB; padding: 12px 0 16px; }
+  .tab-icon-only .tab { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  .dot-indicator { width: 4px; height: 4px; border-radius: 2px; background: #7c2d12; margin-top: 4px; }
+
+  /* ===== 7. Top indicator ===== */
+  .tab-top { display: flex; background: white; border-top: 3px solid #E5E7EB; padding: 8px 0 12px; }
+  .tab-top .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
+  .tab-top .tab .icon-label { font-size: 10px; color: #94A3B8; }
+  .tab-top .tab.active .icon-label { color: #7c2d12; font-weight: 600; }
+  .top-line { position: absolute; top: -11px; width: 32px; height: 3px; background: #7c2d12; border-radius: 0 0 3px 3px; }
+
+  /* ===== 8. Glassmorphism ===== */
+  .tab-glass-wrap { padding: 0 12px 12px; background: linear-gradient(180deg, #f6f5f1 0%, #e8e4dc 100%); position: relative; }
+  .tab-glass { display: flex; background: rgba(255,255,255,0.7); backdrop-filter: blur(12px); border-radius: 20px; padding: 8px 8px 10px; border: 1px solid rgba(255,255,255,0.8); box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  .tab-glass .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .tab-glass .tab .icon-label { font-size: 10px; color: #6B7280; }
+  .tab-glass .tab.active .icon-label { color: #7c2d12; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Tab Bar стилове — Festivo</h1>
+<p class="subtitle">Активен таб: <strong>Моят план</strong> | Brand цвят: #7c2d12</p>
+
+<div class="grid">
+
+  <!-- 1. Standard -->
+  <div class="card">
+    <div class="card-title">1. Standard <span class="card-label">iOS / Material класически</span></div>
+    <div class="phone">
+      <div class="content"><span class="content-text">Моят план</span></div>
+      <div class="tab-standard">
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/><polyline points="9,22 9,12 15,12 15,22" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="icon-label" style="color:#94A3B8">Начало</span>
+        </div>
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><polygon points="3,6 21,6 21,21 3,21" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/><polyline points="3,6 12,2 21,6" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="icon-label" style="color:#94A3B8">Карта</span>
+        </div>
+        <div class="tab active">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" stroke="#7c2d12" stroke-width="2.5" stroke-linecap="round" fill="rgba(124,45,18,0.08)"/></svg>
+          <span class="icon-label" style="color:#7c2d12;font-weight:700">Моят план</span>
+        </div>
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="4" stroke="#94A3B8" stroke-width="2"/></svg>
+          <span class="icon-label" style="color:#94A3B8">Профил</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. FAB center (тъмен) -->
+  <div class="card">
+    <div class="card-title">2. FAB тъмен <span class="card-label">Сегашен стил</span></div>
+    <div class="phone">
+      <div class="content"><span class="content-text">Моят план</span></div>
+      <div class="tab-fab">
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="icon-label">Начало</span>
+        </div>
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><polygon points="3,6 21,6 21,21 3,21" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="icon-label">Карта</span>
+        </div>
+        <div class="fab-center">
+          <div class="fab-orb">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>
+          </div>
+          <span class="fab-label">Моят план</span>
+        </div>
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="4" stroke="#94A3B8" stroke-width="2"/></svg>
+          <span class="icon-label">Профил</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. FAB бял orb -->
+  <div class="card">
+    <div class="card-title">3. FAB бял orb <span class="card-label">Елегантен</span></div>
+    <div class="phone">
+      <div class="content"><span class="content-text">Моят план</span></div>
+      <div class="tab-fab">
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="icon-label">Начало</span>
+        </div>
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><polygon points="3,6 21,6 21,21 3,21" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="icon-label">Карта</span>
+        </div>
+        <div class="fab-center">
+          <div class="fab-orb-white">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" stroke="#7c2d12" stroke-width="2.5" stroke-linecap="round" fill="rgba(124,45,18,0.08)"/></svg>
+          </div>
+          <span class="fab-label">Моят план</span>
+        </div>
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="4" stroke="#94A3B8" stroke-width="2"/></svg>
+          <span class="icon-label">Профил</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Pill active -->
+  <div class="card">
+    <div class="card-title">4. Pill active <span class="card-label">Модерен</span></div>
+    <div class="phone">
+      <div class="content"><span class="content-text">Моят план</span></div>
+      <div class="tab-pill">
+        <div class="tab">
+          <div class="pill-icon-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <span class="icon-label">Начало</span>
+        </div>
+        <div class="tab">
+          <div class="pill-icon-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><polygon points="3,6 21,6 21,21 3,21" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <span class="icon-label">Карта</span>
+        </div>
+        <div class="tab active">
+          <div class="pill-icon-wrap active-pill">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" stroke="#7c2d12" stroke-width="2.5" stroke-linecap="round" fill="rgba(124,45,18,0.1)"/></svg>
+          </div>
+          <span class="icon-label" style="color:#7c2d12;font-weight:700">Моят план</span>
+        </div>
+        <div class="tab">
+          <div class="pill-icon-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="4" stroke="#94A3B8" stroke-width="2"/></svg>
+          </div>
+          <span class="icon-label">Профил</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. FAB + Pill combo -->
+  <div class="card">
+    <div class="card-title">5. FAB + Pill combo <span class="card-label">Препоръчан</span></div>
+    <div class="phone">
+      <div class="content"><span class="content-text">Моят план</span></div>
+      <div class="tab-fab">
+        <div class="tab">
+          <div class="pill-icon-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <span class="icon-label">Начало</span>
+        </div>
+        <div class="tab">
+          <div class="pill-icon-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><polygon points="3,6 21,6 21,21 3,21" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <span class="icon-label">Карта</span>
+        </div>
+        <div class="fab-center">
+          <div class="fab-orb-white">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" stroke="#7c2d12" stroke-width="2.5" stroke-linecap="round" fill="rgba(124,45,18,0.1)"/></svg>
+          </div>
+          <span class="fab-label">Моят план</span>
+        </div>
+        <div class="tab">
+          <div class="pill-icon-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="4" stroke="#94A3B8" stroke-width="2"/></svg>
+          </div>
+          <span class="icon-label">Профил</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Floating bar -->
+  <div class="card">
+    <div class="card-title">6. Floating bar <span class="card-label">Airbnb / Spotify стил</span></div>
+    <div class="phone">
+      <div class="content"><span class="content-text">Моят план</span></div>
+      <div class="tab-floating-wrap">
+        <div class="tab-floating">
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+            <span class="icon-label">Начало</span>
+          </div>
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><polygon points="3,6 21,6 21,21 3,21" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+            <span class="icon-label">Карта</span>
+          </div>
+          <div class="tab active">
+            <div class="pill-icon-wrap active-pill" style="padding:4px 12px">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" stroke="#7c2d12" stroke-width="2.5" stroke-linecap="round" fill="rgba(124,45,18,0.1)"/></svg>
+            </div>
+            <span class="icon-label" style="color:#7c2d12;font-weight:700">Моят план</span>
+          </div>
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="4" stroke="#94A3B8" stroke-width="2"/></svg>
+            <span class="icon-label">Профил</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Icon only с dot -->
+  <div class="card">
+    <div class="card-title">7. Icon only + dot <span class="card-label">Компактен</span></div>
+    <div class="phone">
+      <div class="content"><span class="content-text">Моят план</span></div>
+      <div class="tab-icon-only">
+        <div class="tab">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="tab">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><polygon points="3,6 21,6 21,21 3,21" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="tab">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" stroke="#7c2d12" stroke-width="2.5" stroke-linecap="round" fill="rgba(124,45,18,0.1)"/></svg>
+          <div class="dot-indicator"></div>
+        </div>
+        <div class="tab">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="4" stroke="#94A3B8" stroke-width="2"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. Top indicator -->
+  <div class="card">
+    <div class="card-title">8. Top indicator <span class="card-label">iOS класически</span></div>
+    <div class="phone">
+      <div class="content"><span class="content-text">Моят план</span></div>
+      <div class="tab-top">
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="icon-label">Начало</span>
+        </div>
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><polygon points="3,6 21,6 21,21 3,21" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="icon-label">Карта</span>
+        </div>
+        <div class="tab active">
+          <div class="top-line"></div>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" stroke="#7c2d12" stroke-width="2.5" stroke-linecap="round" fill="rgba(124,45,18,0.1)"/></svg>
+          <span class="icon-label" style="color:#7c2d12;font-weight:700">Моят план</span>
+        </div>
+        <div class="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="4" stroke="#94A3B8" stroke-width="2"/></svg>
+          <span class="icon-label">Профил</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. Glassmorphism -->
+  <div class="card">
+    <div class="card-title">9. Glassmorphism <span class="card-label">Модерен blur</span></div>
+    <div class="phone">
+      <div class="content" style="background:linear-gradient(180deg,#f6f5f1,#e8e4dc)"><span class="content-text">Моят план</span></div>
+      <div class="tab-glass-wrap">
+        <div class="tab-glass">
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+            <span class="icon-label">Начало</span>
+          </div>
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><polygon points="3,6 21,6 21,21 3,21" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>
+            <span class="icon-label">Карта</span>
+          </div>
+          <div class="tab active">
+            <div class="pill-icon-wrap active-pill" style="padding:4px 12px">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" stroke="#7c2d12" stroke-width="2.5" stroke-linecap="round" fill="rgba(124,45,18,0.1)"/></svg>
+            </div>
+            <span class="icon-label" style="color:#7c2d12;font-weight:700">Моят план</span>
+          </div>
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="4" stroke="#94A3B8" stroke-width="2"/></svg>
+            <span class="icon-label">Профил</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p style="text-align:center;margin-top:32px;color:#9CA3AF;font-size:13px">Кажи номера на предпочитания вариант</p>
+</body>
+</html>

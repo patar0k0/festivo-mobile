@@ -58,6 +58,24 @@ function normalizeExternalUrl(value: string): string {
   return `https://${trimmed}`;
 }
 
+/** Returns a native app deep-link for known social networks, or null for others. */
+function buildNativeUrl(key: LinkKey, webUrl: string): string | null {
+  if (key === 'instagram') {
+    const m = webUrl.match(/instagram\.com\/([^/?#]+)/i);
+    const username = m?.[1]?.replace(/\/$/, '');
+    return username ? `instagram://user?username=${username}` : null;
+  }
+  if (key === 'facebook') {
+    // fb://facewebmodal opens the in-app browser on Android with the correct page
+    // On iOS the Facebook app handles fb://profile/<slug> for pages
+    const m = webUrl.match(/facebook\.com\/([^/?#]+)/i);
+    const slug = m?.[1]?.replace(/\/$/, '');
+    if (!slug) return null;
+    return `fb://facewebmodal/f?href=${encodeURIComponent(webUrl)}`;
+  }
+  return null;
+}
+
 function getInitials(name: string): string {
   const parts = name
     .trim()
@@ -196,9 +214,11 @@ export default function OrganizerProfileScreen() {
     return LINK_ORDER.reduce<OrganizerSocialLink[]>((acc, key) => {
       const value = data.links?.[key];
       if (typeof value !== 'string' || !value.trim()) return acc;
+      const webUrl = normalizeExternalUrl(value);
       acc.push({
         key,
-        url: normalizeExternalUrl(value),
+        url: webUrl,
+        nativeUrl: buildNativeUrl(key, webUrl) ?? undefined,
         icon: LINK_ICONS[key],
         accessibilityLabel: LINK_LABELS[key],
       });
@@ -244,11 +264,23 @@ export default function OrganizerProfileScreen() {
       {
         onError: (err) => {
           const m = err.message.toLowerCase();
-          if (m.includes('unauthorized') || m.includes('401')) {
-            Alert.alert('Вход', 'Влез в профила си, за да следваш организатори.', [
-              { text: 'Отказ', style: 'cancel' },
-              { text: 'Вход', onPress: () => router.push('/login') },
-            ]);
+          const isAuthError =
+            m.includes('unauthorized') || m.includes('401') || m.includes('403');
+          if (isAuthError) {
+            Alert.alert(
+              'Изтекла сесия',
+              'Влез отново в профила си, за да следваш организатори.',
+              [
+                { text: 'Отказ', style: 'cancel' },
+                { text: 'Вход', onPress: () => router.replace('/(auth)/login') },
+              ],
+            );
+          } else {
+            Alert.alert(
+              'Неуспешно следване',
+              'Нещо се обърка. Провери връзката и опитай отново.',
+              [{ text: 'OK', style: 'cancel' }],
+            );
           }
         },
       },

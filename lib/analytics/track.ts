@@ -17,7 +17,10 @@ type AnalyticsPayload = {
     | 'map_interaction'
     | 'map_search_area'
     | 'proof_pill_click'
-    | 'recommendation_explanation_click';
+    | 'recommendation_explanation_click'
+    | 'schedule_item_toggled'
+    | 'reminder_changed'
+    | 'search_query';
   notification_id?: string;
   festival_id?: string;
   slug?: string;
