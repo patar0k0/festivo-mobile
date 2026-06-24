@@ -12,6 +12,8 @@ import {
   View,
 } from "react-native";
 
+import { EmptyState } from "@/components/ui/EmptyState";
+import { QueryStateView, type QueryLike } from "@/components/ui/QueryStateView";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { followOrganizer, unfollowOrganizer } from "@/lib/api/organizerFollow";
 import { getFollowFeed, type FollowFeedItem, type FollowFeedPage } from "@/lib/api/followFeed";
@@ -172,28 +174,36 @@ export default function FollowingScreen() {
     );
   }, [followStateByOrganizer, queryClient, toggleFollowMutation]);
 
-  if (feedQuery.isLoading && items.length === 0) {
-    return (
-      <View style={styles.loadingWrap}>
-        <Skeleton height={96} radius={14} />
-        <Skeleton height={96} radius={14} />
-        <Skeleton height={96} radius={14} />
-      </View>
-    );
-  }
-
-  if (items.length === 0 && !feedQuery.isFetching) {
-    return (
-      <View style={styles.emptyWrap}>
-        <Ionicons name="sparkles-outline" size={42} color="#9CA3AF" />
-        <Text style={styles.emptyTitle}>Все още няма активности</Text>
-        <Text style={styles.emptySub}>Последвайте организатори, за да получите персонализиран feed.</Text>
-      </View>
-    );
-  }
+  const feedState: QueryLike<FollowFeedItem[]> = {
+    data: feedQuery.isLoading && items.length === 0 ? undefined : items,
+    isLoading: feedQuery.isLoading,
+    isError: feedQuery.isError,
+    refetch: () => {
+      void feedQuery.refetch();
+    },
+  };
 
   return (
-    <FlatList
+    <QueryStateView<FollowFeedItem[]>
+      query={feedState}
+      isEmpty={(data) => data.length === 0}
+      loading={
+        <View style={styles.loadingWrap}>
+          <Skeleton height={96} radius={14} />
+          <Skeleton height={96} radius={14} />
+          <Skeleton height={96} radius={14} />
+        </View>
+      }
+      empty={
+        <EmptyState
+          icon="sparkles-outline"
+          title="Все още няма активности"
+          subtitle="Последвайте организатори, за да получите персонализиран feed."
+        />
+      }
+    >
+      {() => (
+        <FlatList
       data={items}
       keyExtractor={(item) => `${item.activity_type}:${item.festival?.festivalId}`}
       refreshControl={<RefreshControl refreshing={feedQuery.isRefetching} onRefresh={onRefresh} />}
@@ -243,7 +253,9 @@ export default function FollowingScreen() {
           </View>
         ) : null
       }
-    />
+        />
+      )}
+    </QueryStateView>
   );
 }
 
