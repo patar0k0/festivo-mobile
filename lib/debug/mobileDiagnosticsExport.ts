@@ -10,7 +10,11 @@ import {
 const MAX_EXPORTED_EVENTS = 200;
 
 function getAppVersion(): string {
-  return Constants.expoConfig?.version ?? Constants.manifest?.version ?? 'unknown';
+  return (
+    Constants.expoConfig?.version ??
+    (Constants.nativeAppVersion as string | undefined) ??
+    'unknown'
+  );
 }
 
 export type MobileDiagnosticsExport = {
