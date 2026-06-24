@@ -7,13 +7,16 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotificationResponseNavigation } from '@/hooks/use-notification-response-navigation';
 import { AuthProvider, useAuth } from '@/lib/auth/useAuth';
+import { initSentry } from '@/lib/observability/sentry';
 import { getOnboardingDraft } from '@/lib/personalization/onboarding';
 import { queryClient } from '@/lib/queryClient';
 
 SplashScreen.preventAutoHideAsync();
+initSentry();
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -133,15 +136,17 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AuthProvider>
-          <QueryClientProvider client={queryClient}>
-            <RootStack />
-          </QueryClientProvider>
-        </AuthProvider>
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <AuthProvider>
+            <QueryClientProvider client={queryClient}>
+              <RootStack />
+            </QueryClientProvider>
+          </AuthProvider>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
