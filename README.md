@@ -48,3 +48,29 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Разработка / Development
+
+Изисквания: Node 20, npm.
+
+```bash
+npm ci            # инсталиране на зависимости
+npm start         # Expo dev server
+npm run android   # билд/пускане на Android
+```
+
+### Качество на кода
+
+```bash
+npm run lint        # ESLint (eslint-config-expo + eqeqeq)
+npm run typecheck   # tsc --noEmit (strict)
+npm test            # Jest (jest-expo)
+npm run test:watch  # тестове в watch режим
+npm run test:ci     # тестове с coverage (както в CI)
+```
+
+Тестовете живеят до кода, който покриват (`foo.ts` → `foo.test.ts`). CI (GitHub Actions) пуска lint + typecheck + tests на всеки push и PR.
+
+### Error tracking
+
+Production билдовете репортват грешки към Sentry, ако `EXPO_PUBLIC_SENTRY_DSN` е зададен в средата. В development Sentry е изключен.

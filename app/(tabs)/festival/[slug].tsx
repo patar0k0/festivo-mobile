@@ -23,6 +23,8 @@ import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FestivalDetailStickyBar } from '@/components/festival/FestivalDetailStickyBar';
+// Metro resolves the .native/.web platform variants of this module at build time.
+// eslint-disable-next-line import/no-unresolved
 import { FestivalMapPreview } from '@/components/festival/FestivalMapPreview';
 import { FestivalScheduleSectionList } from '@/components/festival/FestivalScheduleSectionList';
 import { VerifiedBadge } from '@/components/organizer/VerifiedBadge';
