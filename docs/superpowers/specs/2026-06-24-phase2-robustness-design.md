@@ -47,7 +47,9 @@
 - Компонентни тестове (първи RNTL render): `EmptyState` рендерира заглавие/действие; `ErrorState` извиква `onRetry` при натискане; `QueryStateView` избира правилния клон за всяко състояние.
 
 ### 4. Миграция на еталонен екран
-- `components/screens/HomeScreen.tsx` минава секциите си към `QueryStateView` + `EmptyState`/`ErrorState`. Поведението остава визуално еквивалентно; целта е да докаже pattern-а и да намали inline дублирането. Останалите екрани се мигрират по-късно (извън тази фаза).
+- `components/screens/FollowingScreen.tsx` минава loading/empty/error клоновете си към `QueryStateView` + `EmptyState`/`ErrorState`. Избран вместо HomeScreen, защото е екран-ниво (един infinite query), докато HomeScreen е многосекционен с per-section състояния и вече има собствен `SectionError` — лош кандидат за generic wrapper.
+- **Поправя реална дупка:** в момента FollowingScreen няма error branch — при грешка в заявката `items.length === 0` минава през empty клона и показва „Все още няма активности" вместо грешка с retry. Миграцията добавя истинско error състояние.
+- Останалите екрани се мигрират по-късно (извън тази фаза).
 
 ### 5. Coverage праг
 - `jest.config.js` получава скромен глобален `coverageThreshold`, който минава днес: `{ global: { lines: 35, functions: 35, statements: 35, branches: 25 } }`. Точните числа се потвърждават спрямо реалния отчет при имплементация и се сетват малко под текущото покритие, за да не чупят CI, но да хванат регресия надолу.
@@ -60,7 +62,7 @@
 - Без структуриран `ApiError` тип в тази фаза — нарочно, за да не пипаме ~10 api файла (консервативност). Статусът се чете от текста на грешката, което покрива съществуващия формат.
 
 ## Извън обхвата (нарочно)
-- Миграция на екрани извън HomeScreen.
+- Миграция на екрани извън FollowingScreen.
 - Структуриран `ApiError` рефактор на api слоя.
 - i18n, iOS, store assets, EAS (→ Фаза 3).
 - e2e/Detox/Maestro.
@@ -68,14 +70,14 @@
 
 ## Критерии за приемане (Definition of Done)
 1. `npm test` минава зелено; новите suite-ове включени.
-2. `QueryStateView`, `EmptyState`, `ErrorState` съществуват, тествани са, и HomeScreen ги ползва.
+2. `QueryStateView`, `EmptyState`, `ErrorState` съществуват, тествани са, и FollowingScreen ги ползва (включително вече истинско error състояние).
 3. `queryClient` има defaults; `shouldRetryQuery` е изваден и тестван (4xx не retry-ва, 5xx/мрежа retry-ва).
 4. Async offline queue пътищата имат тестове, включително partial-failure и idempotent skip.
 5. `jest.config.js` има coverageThreshold; `npm run test:ci` минава с него.
 6. `npm run lint` и `npm run typecheck` остават зелени.
 
 ## Рискове
-- HomeScreen миграцията може да промени визуалното поведение на ръба (кеш vs skeleton). Митигиране: `QueryStateView` пази „кеш докато презарежда"; ревю на diff-а спрямо текущите 6 места.
+- FollowingScreen миграцията може да промени поведението на ръба (кеш vs skeleton, ново error състояние). Митигиране: `QueryStateView` пази „кеш докато презарежда"; запазваме съществуващите loading skeleton и empty копи дословно.
 - `staleTime`/`refetchOnReconnect` промяна може да измени честотата на заявките. Митигиране: консервативни стойности (60s stale), без агресивен refetch.
 
 ## Следваща фаза (само за ориентир)
