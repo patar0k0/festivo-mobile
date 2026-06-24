@@ -166,7 +166,7 @@ export default function ProfileFollowingOrganizersScreen() {
           <Ionicons name="people-outline" size={48} color="#9CA3AF" />
           <Text style={styles.emptyTitle}>Не следвате организатори</Text>
           <Text style={styles.emptySub}>
-            Отворете профила на организатор и натиснете „Следвай", за да получавате известия за новите им
+            Отворете профила на организатор и натиснете „Следвай“, за да получавате известия за новите им
             фестивали.
           </Text>
         </View>
